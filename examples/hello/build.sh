@@ -7,7 +7,7 @@ OKSTYLE="\e[2m" # dim
 RUN=
 CMD=
 
-case "$1" in
+while [[ $# -gt 0 ]]; do case "$1" in
   -h*|--help)
     echo "usage: $0 [options] [arg to ninja ...]"
     echo "  -h, -help   Show help on stdout and exit"
@@ -19,9 +19,11 @@ case "$1" in
   -w|--?watch) CMD=watch; shift ;;
   -run=*)      RUN=${1:5}; shift ;;
   -run)        RUN=1; shift ;;
-esac
+  *)           break ;;
+esac; done
 
 [ "$RUN" != "1" ] || RUN=$1
+echo "x $@"
 
 LLVM_PATH=$(../../libplaywgpu/find-llvm.sh)
 echo "Using LLVM at $LLVM_PATH"
@@ -48,7 +50,6 @@ if [ "$CMD" = "watch" ]; then
   while true; do
     echo -e "\x1bc"  # clear screen ("scroll to top" style)
     if ninja "$@"; then
-      ls -lh out/example*.*
       [ -z "$RUN" ] || _run
     fi
     printf "\e[2m> watching files for changes...\e[m\n"
