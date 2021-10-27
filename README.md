@@ -39,3 +39,29 @@ examples/hello/build.sh -run out/example_mac_x64
 
 > Note: If you're having issues with clang/llvm, install a non-Apple version
 > from for example homebrew: `brew install llvm`.
+
+
+## Concept
+
+PlaySys is one step in a three-part strategy to birth a new software platform:
+
+#### Step 1
+PlaySys — a syscall-like API that is the interface betweet a program and the
+OS/environment. It is how the program percieves and experiences reality.
+Filesystem acts as an arbitrary extension to a minimal syscall API, which
+includes an io_uring-like interface.
+Capability based: e.g. does this system support pointer input?
+GPU compute? Writable filesystem?<br>
+_An "OS" from a program's perspective_<br>
+
+#### Step 2
+Libraries to make GUI & CLI development easier on top of PlaySys.<br>
+_The API from an app developer's perspective_<br>
+
+#### Step 3
+Implementations of PlaySys:
+- an OS using the Linux kernel providing a window manager<br>
+  _An "OS" from a user's perspective_
+- an implementation for web platform:<br>
+  run PlaySys programs in a web browser.<br>
+  _An "app" from a user's perspective_
