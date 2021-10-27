@@ -1,0 +1,106 @@
+ninja_required_version = 1.3
+
+builddir     = out
+playsys      = ../../libplaysys
+playwgpu     = ../../libplaywgpu
+playwgpu_out = $playwgpu/out/debug
+dawn_out     = $playwgpu/out/debug/deps/dawn
+
+cflags = $
+  -std=c11 $
+  -g $
+  -fcolor-diagnostics $
+  -Wall $
+  -Wextra $
+  -Wvla $
+  -Wimplicit-fallthrough $
+  -Wno-missing-field-initializers $
+  -Wno-unused-parameter $
+  -Werror=implicit-function-declaration $
+  -Wcovered-switch-default $
+  -Wunused
+
+ldflags =
+
+cflags_wasm = $
+  --no-standard-libraries $
+  -fvisibility=hidden $
+  -Ofast $
+  --target=wasm32
+
+cflags_host = $
+  -O3 $
+  -march=native $
+  -I$playsys/include $
+  -I$playwgpu/include
+
+ldflags_macos = $
+  -platform_version macos 10.15 10.15 $
+  -ObjC $
+  -lSystem.B $
+  -framework CoreFoundation $
+  -framework Cocoa $
+  -framework Metal $
+  -framework IOKit $
+  -framework IOSurface $
+  -framework QuartzCore
+
+# --------------------------------------------------------------
+
+rule c2ll
+  command = clang -MMD -MF $out.d $cflags -emit-llvm -c -S -o $out $in
+  depfile = $out.d
+
+rule c2obj
+  command = clang -MMD -MF $out.d $cflags -c -o $out $in
+  depfile = $out.d
+
+rule c2bc
+  command = clang -MMD -MF $out.d $cflags -emit-llvm -c -o $out $in
+  depfile = $out.d
+
+rule ll2bc
+  command = llvm-as $in -o $out
+
+rule wasm_compile_and_link
+  command = clang $cflags $cflags_wasm $
+    -Wno-override-module $
+    -Wl,--no-entry $
+    -Wl,--no-gc-sections $
+    -Wl,--export-dynamic $
+    -Wl,--import-memory $
+    -Wl,-allow-undefined-file sys_wasm.syms $
+    -o $out $in
+
+rule macos_x64_ld
+  # ld aliases: ld.lld (Unix), ld64.lld (macOS), lld-link (Windows), wasm-ld (WebAssembly)
+  command = ld64.lld $ldflags -arch x86_64 $ldflags_macos $in -o $out
+
+rule wasm2wast
+  command = wasm2wat $in -o $out
+
+rule wasm_asyncify
+  command = wasm-opt --asyncify -O $in -o $out
+
+# --------------------------------------------------------------
+
+build $builddir/example_mac_x64_d: macos_x64_ld $
+  $builddir/mac_x64/example.obj $
+  $builddir/mac_x64/syslib.obj $
+  $builddir/mac_x64/sys_posix.obj
+  ldflags = $ldflags -L$playwgpu_out -rpath $playwgpu_out -lplaywgpu -lc++
+
+build $builddir/example_mac_x64: macos_x64_ld $
+  $builddir/mac_x64/example.obj $
+  $builddir/mac_x64/syslib.obj $
+  $builddir/mac_x64/sys_posix.obj $
+  $playwgpu_out/libplaywgpu_all.a
+
+build $builddir/mac_x64/example.obj: c2obj example.c
+  cflags = $cflags $cflags_host
+build $builddir/mac_x64/syslib.obj: c2obj syslib.c
+  cflags = $cflags $cflags_host
+build $builddir/mac_x64/sys_posix.obj: c2obj $playsys/src/sys_posix.c
+  cflags = $cflags $cflags_host
+
+default $builddir/example_mac_x64

@@ -1,0 +1,76 @@
+cmake_minimum_required(VERSION 3.21)
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+set(CMAKE_MACOSX_RPATH ON)  # cmake policy CMP0042
+project(playwgpu)
+
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Debug)
+endif()
+
+add_subdirectory("deps/dawn" EXCLUDE_FROM_ALL)
+
+set(PWGPU_COMPILE_OPTIONS
+  -Wall -Wextra
+  -Wvla
+  -Wimplicit-fallthrough
+  -Wno-missing-field-initializers
+  -Wno-unused-parameter
+  -Werror=implicit-function-declaration
+  -Wunused
+  -fcolor-diagnostics
+  -g
+
+  $<$<COMPILE_LANGUAGE:C>:-std=c11>
+  $<$<COMPILE_LANGUAGE:OBJC>:-std=c11>
+  $<$<COMPILE_LANGUAGE:CXX>:-std=c++17>
+  $<$<COMPILE_LANGUAGE:OBJCXX>:-std=c++17>
+)
+set(PWGPU_COMPILE_DEFS)
+
+if (${CMAKE_BUILD_TYPE} MATCHES "Debug")
+  set(PWGPU_COMPILE_DEFS ${PWGPU_COMPILE_DEFS} PWGPU_DEBUG=1)
+  set(PWGPU_COMPILE_OPTIONS ${PWGPU_COMPILE_OPTIONS} -O0)
+else()
+  set(PWGPU_COMPILE_OPTIONS ${PWGPU_COMPILE_OPTIONS} -O3 -march=native)
+  set(PWGPU_COMPILE_DEFS ${PWGPU_COMPILE_DEFS} PWGPU_DAWN_DISABLE_VALIDATION=1)
+endif()
+
+# ---------------------------------------------------------------------------------
+# libplaywgpu
+
+add_library(playwgpu STATIC SHARED
+  src/wgpu.cc
+  src/glfw.cc
+)
+target_compile_definitions(playwgpu PRIVATE ${PWGPU_COMPILE_DEFS})
+target_compile_options(playwgpu PRIVATE ${PWGPU_COMPILE_OPTIONS})
+target_include_directories(playwgpu
+  PRIVATE
+    ${CMAKE_CURRENT_BINARY_DIR}/deps/dawn/gen/src/include/dawn # <webgpu.h>
+    ${CMAKE_CURRENT_BINARY_DIR}/deps/dawn/gen/src/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/deps/dawn/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../libplaysys/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_link_libraries(playwgpu
+  PRIVATE
+    glfw
+    glm
+    dawncpp
+    dawn_proc
+    dawn_common
+    dawn_platform
+    dawn_native
+    dawn_utils
+    dawn_internal_config  # for definitions DAWN_ENABLE_BACKEND_*
+)
+
+add_custom_command(TARGET playwgpu POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy
+    ${CMAKE_CURRENT_BINARY_DIR}/deps/dawn/gen/src/include/dawn/webgpu.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/webgpu.h
+)
+
+add_custom_command(TARGET playwgpu POST_BUILD
+  COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/mklib.sh ${CMAKE_CURRENT_BINARY_DIR}
+)
