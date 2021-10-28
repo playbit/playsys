@@ -7,12 +7,7 @@
 
 #include <GLFW/glfw3.h>
 #include <utils/GLFWUtils.h> /* from dawn */
-
-#include <dawn/dawn_proc.h>
-#include <dawn_wire/WireServer.h>
 #include <dawn_native/DawnNative.h>
-
-
 
 sys_ret pwgpu_surface_read(pwgpu_surface_t* surf, void* data, usize size) {
   switch (surf->state) {
@@ -58,11 +53,6 @@ void _pwgpu_surface_free_oswin(pwgpu_surface_t* surf) {
 }
 
 
-std::unique_ptr<wgpu::ChainedStruct> _pwgpu_surface_descriptor(pwgpu_surface_t* surf) {
-  assert(surf->window != NULL);
-  return utils::SetupWindowAndGetSurfaceDescriptorForTesting(surf->window);
-}
-
 // ———————————————————————————————————————————————————————————————————_
 // glfw specific
 
@@ -86,49 +76,41 @@ sys_ret _pwgpu_surface_init_oswin(
 
   assert(surf->window == NULL);
 
-  // [dawn] Setup the correct hints for GLFW for backends
-  utils::SetupGLFWWindowHintsForBackend(_pwgpu_backend_type());
-
+  // Setup the correct hints for GLFW for backends (dawn-specific)
   glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_FALSE);
+  if (_pwgpu_backend_type() == wgpu::BackendType::OpenGL) {
+    // Ask for OpenGL 4.4 which is what the GL backend requires for compute shaders and
+    // texture views.
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 4);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+  } else if (_pwgpu_backend_type() == wgpu::BackendType::OpenGLES) {
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+    glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_EGL_CONTEXT_API);
+  } else {
+    // Without this GLFW will initialize a GL context on the window, which prevents using
+    // the window with other APIs (by crashing in weird ways).
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+  }
 
   // create window
   surf->window = glfwCreateWindow((int)width, (int)height, title, NULL, NULL);
   if (!surf->window)
     return -sys_err_invalid;
-
-  // make it possible to refer to the app struct from glfw window callbacks
   glfwSetWindowUserPointer(surf->window, surf);
-
-  // // log some monitor information
-  // // TODO: map window to monitor by comparing window pos to glfwGetMonitors() values.
-  // // TODO: register window move callback GLFWwindowposfun and update io.pxPerMM
-  // {
-  //   GLFWmonitor* monitor = fullscreenMonitor ? fullscreenMonitor : glfwGetPrimaryMonitor();
-  //   assert(monitor != NULL);
-  //   int monWidthMM, monHeightMM;
-  //   glfwGetMonitorPhysicalSize(monitor, &monWidthMM, &monHeightMM);
-  //   // TODO: use CGDisplayScreenSize on mac for more accurate readout of physical size.
-  //   const GLFWvidmode* vmode = glfwGetVideoMode(monitor);
-  //   float xscale = 1.0, yscale = 1.0;
-  //   glfwGetMonitorContentScale(monitor, &xscale, &yscale);
-  //   _host.io().pxPerMM = (float)( ((double)vmode->width * xscale) / (double)monWidthMM );
-  //   dlog("glfw monitor: \"%s\"\n"
-  //        "  %dx%dmm  %ux%upx  %.4f mm/px  %.2f px/mm  %d Hz  %d bit/ch  %.2fx%.2f scale",
-  //     glfwGetMonitorName(monitor),
-  //     monWidthMM, monHeightMM,
-  //     (u32)vmode->width * (u32)xscale, (u32)vmode->height * (u32)yscale,
-  //     1.0/_host.io().pxPerMM,
-  //     _host.io().pxPerMM,
-  //     vmode->refreshRate,
-  //     vmode->greenBits,
-  //     xscale, yscale);
-  // }
 
   // [rsms] move window to bottom right corner of screen
   if (getenv("RSMS_DEV_SETUP")) {
     GLFWmonitor* monitor = glfwGetWindowMonitor(surf->window);
-    const GLFWvidmode* vmode = glfwGetVideoMode(monitor);
-    glfwSetWindowPos(surf->window, vmode->width - (int)width, vmode->height - (int)height);
+    if (!monitor)
+      monitor = glfwGetPrimaryMonitor();
+    if (monitor) {
+      const GLFWvidmode* vmode = glfwGetVideoMode(monitor);
+      glfwSetWindowPos(surf->window, vmode->width - (int)width, vmode->height - (int)height);
+    }
   }
 
   // get framebuffer info

@@ -86,17 +86,21 @@ rule wasm_asyncify
 
 build $builddir/example_mac_x64_d: macos_x64_ld $
   $builddir/mac_x64/example.obj $
+  $builddir/mac_x64/hello_triangle.obj $
   $builddir/mac_x64/syslib.obj $
   $builddir/mac_x64/sys_posix.obj
-  ldflags = $ldflags -L$playwgpu_out -rpath $playwgpu_out -lplaywgpu -lc++
+  ldflags = $ldflags -L$playwgpu_out -rpath $playwgpu_out -lplaywgpu_d -lc++
 
 build $builddir/example_mac_x64: macos_x64_ld $
   $builddir/mac_x64/example.obj $
+  $builddir/mac_x64/hello_triangle.obj $
   $builddir/mac_x64/syslib.obj $
   $builddir/mac_x64/sys_posix.obj $
   $playwgpu_out/libplaywgpu_all.a
 
 build $builddir/mac_x64/example.obj: c2obj example.c
+  cflags = $cflags $cflags_host
+build $builddir/mac_x64/hello_triangle.obj: c2obj hello_triangle.c
   cflags = $cflags $cflags_host
 build $builddir/mac_x64/syslib.obj: c2obj syslib.c
   cflags = $cflags $cflags_host

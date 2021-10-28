@@ -10,7 +10,7 @@ if ! [ -d "$1" ]; then
 fi
 
 cd "$1"
-echo "generating $PWD/$OUTPUT_LIBNAME.a"
+echo "generating $OUTPUT_LIBNAME.a"
 rm -f $OUTPUT_LIBNAME.a
 cat << EOF > $OUTPUT_LIBNAME.mri
 create $OUTPUT_LIBNAME.a
@@ -49,5 +49,5 @@ EOF
 
 "$LLVM_PATH"/bin/llvm-ar -M <$OUTPUT_LIBNAME.mri
 rm $OUTPUT_LIBNAME.mri
-ls -lh $PWD/$OUTPUT_LIBNAME.a
+ls -lh $OUTPUT_LIBNAME.a
 

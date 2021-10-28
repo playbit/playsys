@@ -86,11 +86,11 @@ static void pwgpu_init() {
   gDawnNative.DiscoverDefaultAdapters();
 
   #ifdef DEBUG
-  gDawnNative.EnableBackendValidation(true);
-  gDawnNative.SetBackendValidationLevel(dawn_native::BackendValidationLevel::Full);
+    gDawnNative.EnableBackendValidation(true);
+    gDawnNative.SetBackendValidationLevel(dawn_native::BackendValidationLevel::Full);
   #elif defined(WGPU_DAWN_DISABLE_VALIDATION)
-  gDawnNative.EnableBackendValidation(false);
-  gDawnNative.SetBackendValidationLevel(dawn_native::BackendValidationLevel::Disabled);
+    gDawnNative.EnableBackendValidation(false);
+    gDawnNative.SetBackendValidationLevel(dawn_native::BackendValidationLevel::Disabled);
   #endif
 
   logAvailableAdapters();
@@ -242,27 +242,65 @@ sys_ret _pwgpu_surface_init(pwgpu_surface_t* surf) {
   std::unique_ptr<wgpu::ChainedStruct> sd1 = _pwgpu_surface_descriptor(surf);
   wgpu::SurfaceDescriptor descriptor;
   descriptor.nextInChain = sd1.get();
-  WGPUInstance instance = gDawnNative.Get();
-  dlog("instance %p", instance);
-  surf->surface = wgpu::Instance(instance).CreateSurface(&descriptor);
-  dlog("D");
+  surf->surface = wgpu::Instance(gDawnNative.Get()).CreateSurface(&descriptor);
+  dlog("WGPUSurface %p", surf->surface.Get());
   if (!surf->surface) {
     errlog("dawn: failed to create surface for dawn-native instance");
     return -sys_err_not_supported;
   }
 
-  // // create wgpu swapchain
-  // wgpu::SwapChainDescriptor desc = {
-  //   .format = wgpu::TextureFormat::BGRA8Unorm,
-  //   .usage  = wgpu::TextureUsage::RenderAttachment,
-  //   .width  = surf->fbwidth,
-  //   .height = surf->fbheight,
-  //   .presentMode = wgpu::PresentMode::Mailbox,
-  // };
-  // surf->swapchain = _device.CreateSwapChain(_surface, &desc);
-
   surf->state = WGPU_SURF_STATE_ACTIVE;
   return 0;
+}
+
+
+// ————————————————————————————————————————————————————————————————————————————————————
+// pwgpu_ctx
+
+struct pwgpu_ctx {
+  std::vector<WGPUDevice>    devices;
+  std::vector<WGPUTexture>   textures;
+  std::vector<WGPUSwapChain> swapchains;
+
+  pwgpu_ctx() {}
+  ~pwgpu_ctx() {}
+};
+
+pwgpu_ctx_t* pwgpu_ctx_create(void* mem) {
+  dlog("sizeof(pwgpu_ctx) %zu", sizeof(pwgpu_ctx));
+  static_assert(PWGPU_CTX_SIZE >= sizeof(pwgpu_ctx), "update PWGPU_CTX_SIZE");
+  // void* mem = allocf(1, sizeof(pwgpu_ctx));
+  memset(mem, 0, sizeof(pwgpu_ctx));
+  pwgpu_ctx* ctx = new(mem) pwgpu_ctx();
+  return ctx;
+}
+
+void pwgpu_ctx_dispose(pwgpu_ctx_t* ctx) {
+  ctx->~pwgpu_ctx();
+  // memset(ctx, 0, sizeof(pwgpu_ctx));
+}
+
+
+WGPUDevice pwgpu_ctx_set_device(pwgpu_ctx_t* ctx, sys_fd user_fd) {
+  auto it = gOpenResources.find(user_fd);
+  if (it == gOpenResources.end() || it->second.type != WGPU_RES_DEVICE)
+    return nullptr;
+  return it->second.dev->device.Get();
+}
+
+WGPUSurface pwgpu_ctx_set_surface(pwgpu_ctx_t* ctx, sys_fd user_fd) {
+  auto it = gOpenResources.find(user_fd);
+  if (it == gOpenResources.end() || it->second.type != WGPU_RES_SURFACE)
+    return nullptr;
+
+  pwgpu_surface_t* surf = it->second.surf;
+  if (surf->state == WGPU_SURF_STATE_INIT) {
+    sys_ret r = _pwgpu_surface_init(surf);
+    if (r != 0)
+      return nullptr;
+  }
+
+  return surf->surface.Get();
 }
 
 // ————————————————————————————————————————————————————————————————————————————————————
@@ -332,56 +370,6 @@ bool pwgpu_ctl::Flush() {
   dlog("pwgpu_ctl::Flush %zu", outbuf.size());
   outbuf.resize(0);
   return true;
-}
-
-
-// ————————————————————————————————————————————————————————————————————————————————————
-// pwgpu_ctx
-
-struct pwgpu_ctx {
-  std::vector<WGPUDevice>    devices;
-  std::vector<WGPUTexture>   textures;
-  std::vector<WGPUSwapChain> swapchains;
-
-  pwgpu_ctx() {}
-  ~pwgpu_ctx() {}
-};
-
-pwgpu_ctx_t* pwgpu_ctx_create(void* mem) {
-  dlog("sizeof(pwgpu_ctx) %zu", sizeof(pwgpu_ctx));
-  static_assert(PWGPU_CTX_SIZE >= sizeof(pwgpu_ctx), "update PWGPU_CTX_SIZE");
-  // void* mem = allocf(1, sizeof(pwgpu_ctx));
-  memset(mem, 0, sizeof(pwgpu_ctx));
-  pwgpu_ctx* ctx = new(mem) pwgpu_ctx();
-  return ctx;
-}
-
-void pwgpu_ctx_dispose(pwgpu_ctx_t* ctx) {
-  ctx->~pwgpu_ctx();
-  // memset(ctx, 0, sizeof(pwgpu_ctx));
-}
-
-
-WGPUDevice pwgpu_ctx_set_device(pwgpu_ctx_t* ctx, sys_fd user_fd) {
-  auto it = gOpenResources.find(user_fd);
-  if (it == gOpenResources.end() || it->second.type != WGPU_RES_DEVICE)
-    return nullptr;
-  return it->second.dev->device.Get();
-}
-
-WGPUSurface pwgpu_ctx_set_surface(pwgpu_ctx_t* ctx, sys_fd user_fd) {
-  auto it = gOpenResources.find(user_fd);
-  if (it == gOpenResources.end() || it->second.type != WGPU_RES_SURFACE)
-    return nullptr;
-
-  pwgpu_surface_t* surf = it->second.surf;
-  if (surf->state == WGPU_SURF_STATE_INIT) {
-    sys_ret r = _pwgpu_surface_init(surf);
-    if (r != 0)
-      return nullptr;
-  }
-
-  return surf->surface.Get();
 }
 
 
@@ -580,17 +568,3 @@ static void logAvailableAdapters() {
       backend_type_name(p.backendType), adapter_type_name(p.adapterType));
   }
 }
-
-
-#ifdef __APPLE__
-// HERE BE DRAGONS!
-// On macos dawn/src/dawn_native/metal/ShaderModuleMTL.mm uses the @available ObjC
-// feature which expects a runtime symbol that is AFAIK only provided by Apple's
-// version of clang.
-extern "C" int __isPlatformVersionAtLeast(
-  long unkn, long majv, long minv, long buildv)
-{
-  // <= 10.15.x
-  return majv < 10 || (majv == 10 && minv <= 15);
-}
-#endif

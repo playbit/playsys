@@ -1,58 +1,7 @@
 #include <playsys.h>
 #include <playwgpu.h>
-#include "syslib.h"
+#include "hello.h"
 
-#define PUB __attribute__((visibility("default"))) /* WASM export */
-#ifndef NULL
-  #define NULL ((void*)0)
-#endif
-
-#define print1(x) _Generic((x), \
-  unsigned long long: print_uint10, \
-  unsigned long:      print_uint10, \
-  unsigned int:       print_uint10, \
-  long long:          print_sint10, \
-  long:               print_sint10, \
-  int:                print_sint10, \
-  const char*:        print_cstr, \
-  char*:              print_cstr \
-)(x)
-
-#define __PRINT_NARGS_X(a,b,c,d,e,f,g,h,n,...) n
-#define __PRINT_NARGS(...) __PRINT_NARGS_X(__VA_ARGS__,8,7,6,5,4,3,2,1,)
-
-#define __PRINT_CONCAT_X(a,b) a##b
-#define __PRINT_CONCAT(a,b) __PRINT_CONCAT_X(a,b)
-#define __PRINT_DISP(a,...) __PRINT_CONCAT(a,__PRINT_NARGS(__VA_ARGS__))(__VA_ARGS__)
-
-#define __print1(a) print1(a)
-#define __print2(a,b) do { print1(a); print1(b); }while(0)
-#define __print3(a,b,c) do { print1(a); print1(b); print1(c); }while(0)
-#define __print4(a,b,c,d) do { print1(a); print1(b); print1(c); print1(d); }while(0)
-#define __print5(a,b,c,d,e) do { print1(a); print1(b); print1(c); print1(d); print1(e);\
-  }while(0)
-#define __print6(a,b,c,d,e,f) do { print1(a); print1(b); print1(c); print1(d); print1(e);\
-  print1(f); }while(0)
-#define __print7(a,b,c,d,e,f,g) do { print1(a); print1(b); print1(c); print1(d); print1(e);\
-  print1(f); print1(g); }while(0)
-#define __print8(a,b,c,d,e,f,g,h) do { print1(a); print1(b); print1(c); print1(d); print1(e);\
-  print1(f); print1(g); print1(h); }while(0)
-
-#define print(...) __PRINT_DISP(__print,__VA_ARGS__)
-
-#define check_notnull(x) if ((x) == NULL) { check_notnull1(#x); }
-static void check_notnull1(const char* str);
-
-static void print_cstr(const char* str);
-static void print_sint(i64 v, u32 base);
-static void print_uint(u64 v, u32 base);
-inline static void print_sint10(i64 v) { print_sint(v, 10); }
-inline static void print_uint10(u64 v) { print_uint(v, 10); }
-inline static isize write_cstr(sys_fd fd, const char* s) { return write(fd, s, strlen(s)); }
-
-static void check_status(sys_ret r, const char* contextmsg);
-
-// ------------------------------------------------------------------------
 
 void read_file(const char* path, void* buf, usize cap) {
   sys_fd fd      = open(path, sys_open_ronly, 0); check_status(fd, "open");
@@ -105,32 +54,22 @@ PUB int main(int argc, const char** argv) {
   WGPUDevice device = pwgpu_ctx_set_device(ctx, pwgpu_dev); check_notnull(device);
   WGPUSurface surface = pwgpu_ctx_set_surface(ctx, pwgpu_surf); check_notnull(surface);
 
-  // From hereon we can use the standard WebGPU API
-  WGPUSwapChainDescriptor scdesc = {
-    .format = WGPUTextureFormat_RGBA8Unorm,
-    .usage  = WGPUTextureUsage_RenderAttachment,
-    .width  = 400, // TODO surf->fbwidth
-    .height = 400, // TODO surf->fbheight
-    .presentMode = WGPUPresentMode_Mailbox,
-  };
-  WGPUSwapChain swapchain = wgpuDeviceCreateSwapChain(device, surface, &scdesc);
-  check_notnull(swapchain);
+  hello_triangle_set_device(device);
+  hello_triangle_set_surface(surface);
 
   // runloop
   for (int i = 0; i < 500; i++) {
     // if (i == 200) // change size
     //   write_cstr(pwgpu_surf, "width 700\n");
 
-    // isize n = read(pwgpu_ctl, buf, sizeof(buf));
-    // if (n < 1)
-    //   break;
+    hello_triangle_render();
 
     isize n = read(pwgpu_surf, buf, sizeof(buf));
     if (n < 1)
       break; // surface closed
   }
 
-  pwgpu_ctx_dispose(ctx);
+  // pwgpu_ctx_dispose(ctx);
 
   // print("sleeping for 200ms\n");
   // sys_sleep(0, 200000000); // 200ms
@@ -144,15 +83,15 @@ PUB int main(int argc, const char** argv) {
 // ------------------------------------------------------------------------
 // example helper functions
 
-static void print_cstr(const char* str) {
+void print_cstr(const char* str) {
   write(SYS_FD_STDOUT, str, strlen(str));
 }
 
-static void printerr(const char* str) {
+void printerr(const char* str) {
   write(SYS_FD_STDERR, str, strlen(str));
 }
 
-static void check_status(sys_ret r, const char* contextmsg) {
+void check_status(sys_ret r, const char* contextmsg) {
   if (r < 0) {
     sys_err err = (sys_err)-r;
     const char* errname = sys_errname(err);
@@ -166,7 +105,7 @@ static void check_status(sys_ret r, const char* contextmsg) {
   }
 }
 
-static void check_notnull1(const char* str) {
+void check_notnull1(const char* str) {
   printerr("error: "); printerr(str);
   printerr(" is NULL\n");
   exit(1);
@@ -193,13 +132,13 @@ static u32 fmtuint(char* buf, usize bufsize, u64 v, u32 base) {
   return len;
 }
 
-static void print_uint(u64 v, u32 base) {
+void print_uint(u64 v, u32 base) {
   char buf[21];
   u32 len = fmtuint(buf, sizeof(buf), v, base);
   write(SYS_FD_STDOUT, buf, len);
 }
 
-static void print_sint(i64 v, u32 base) {
+void print_sint(i64 v, u32 base) {
   char buf[21];
   usize offs = 0;
   u64 u = (u64)v;

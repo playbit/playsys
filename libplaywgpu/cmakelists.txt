@@ -9,6 +9,18 @@ endif()
 
 add_subdirectory("deps/dawn" EXCLUDE_FROM_ALL)
 
+set(PWGPU_SOURCES
+  src/wgpu.cc
+  src/glfw.cc
+  src/glfw_mac.mm  # TODO: only include for macOS and iOS
+)
+if (APPLE)
+  set(PWGPU_SOURCES ${PWGPU_SOURCES}
+    src/mac.c
+    src/glfw_mac.mm
+  )
+endif()
+
 set(PWGPU_COMPILE_OPTIONS
   -Wall -Wextra
   -Wvla
@@ -38,11 +50,8 @@ endif()
 # ---------------------------------------------------------------------------------
 # libplaywgpu
 
-add_library(playwgpu STATIC SHARED
-  src/wgpu.cc
-  src/glfw.cc
-)
-target_compile_definitions(playwgpu PRIVATE ${PWGPU_COMPILE_DEFS})
+add_library(playwgpu STATIC ${PWGPU_SOURCES})
+target_compile_definitions(playwgpu PRIVATE ${PWGPU_COMPILE_DEFS} PWGPU_STATIC_LIB=1)
 target_compile_options(playwgpu PRIVATE ${PWGPU_COMPILE_OPTIONS})
 target_include_directories(playwgpu
   PRIVATE
@@ -73,4 +82,32 @@ add_custom_command(TARGET playwgpu POST_BUILD
 
 add_custom_command(TARGET playwgpu POST_BUILD
   COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/mklib.sh ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+# ---------------------------------------------------------------------------------
+# libplaywgpu_d -- dynamic lib
+
+get_target_property(PWGPU_LINK_LIBRARIES playwgpu LINK_LIBRARIES)
+get_target_property(PWGPU_INCLUDE_DIRECTORIES playwgpu INCLUDE_DIRECTORIES)
+
+add_library(playwgpu_d SHARED ${PWGPU_SOURCES})
+target_compile_definitions(playwgpu_d PRIVATE ${PWGPU_COMPILE_DEFS})
+target_compile_options(playwgpu_d PRIVATE ${PWGPU_COMPILE_OPTIONS})
+target_include_directories(playwgpu_d PRIVATE ${PWGPU_INCLUDE_DIRECTORIES})
+target_link_libraries(playwgpu_d PRIVATE ${PWGPU_LINK_LIBRARIES})
+
+# make sure nothing is stripped from the static libs
+set(PWGPU_DAWN_BIN_DIR ${CMAKE_CURRENT_BINARY_DIR}/deps/dawn)
+set(PWGPU_STATIC_LIBS
+  ${PWGPU_DAWN_BIN_DIR}/src/dawn/libdawncpp.a
+)
+foreach(lib IN LISTS PWGPU_STATIC_LIBS)
+  target_link_options(playwgpu_d PRIVATE "-Wl,-force_load,${lib}")
+endforeach()
+
+# TODO: deduplicate
+add_custom_command(TARGET playwgpu_d POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy
+    ${CMAKE_CURRENT_BINARY_DIR}/deps/dawn/gen/src/include/dawn/webgpu.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/webgpu.h
 )

@@ -48,12 +48,10 @@ typedef enum {
 typedef struct GLFWwindow GLFWwindow;
 
 struct pwgpu_surface {
-  sys_fd               fd; // "our end" of the read-write, non-seekable stream
+  sys_fd                fd; // "our end" of the read-write, non-seekable stream
   pwgpu_surface_state_t state;
-  GLFWwindow*          window;
-
-  wgpu::Surface   surface;
-  wgpu::SwapChain swapchain;
+  GLFWwindow*           window;
+  wgpu::Surface         surface;
 
   u32   fbwidth, fbheight; // dimensions in pixels
   float fbscale;           // 1 dp = fbscale px
