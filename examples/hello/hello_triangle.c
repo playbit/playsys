@@ -2,6 +2,10 @@
 #include <playwgpu.h>
 #include "hello.h"
 
+// we have no libc, but llvm has most math functions built-in
+#define fabs __builtin_fabs
+#define sinf __builtin_sinf
+#define cosf __builtin_cosf
 
 static WGPUDevice         g_device = NULL;
 static WGPUSurface        g_surface = NULL;
@@ -25,47 +29,51 @@ static WGPURenderPipeline create_pipeline(
   check_notnull(device);
   check_notnull(vsmod);
   check_notnull(fsmod);
-  WGPURenderPipelineDescriptor pd = {};
   WGPUTextureFormat swapChainFormat = WGPUTextureFormat_BGRA8Unorm; // FIXME
 
   // Fragment state
-  WGPUBlendState blend = {};
-  blend.color.operation = WGPUBlendOperation_Add;
-  blend.color.srcFactor = WGPUBlendFactor_One;
-  blend.color.dstFactor = WGPUBlendFactor_One;
-  blend.alpha.operation = WGPUBlendOperation_Add;
-  blend.alpha.srcFactor = WGPUBlendFactor_One;
-  blend.alpha.dstFactor = WGPUBlendFactor_One;
+  WGPUBlendState blend = {
+    .color = {
+      .operation = WGPUBlendOperation_Add,
+      .srcFactor = WGPUBlendFactor_One,
+      .dstFactor = WGPUBlendFactor_One,
+    },
+    .alpha = {
+      .operation = WGPUBlendOperation_Add,
+      .srcFactor = WGPUBlendFactor_One,
+      .dstFactor = WGPUBlendFactor_One,
+    },
+  };
+  WGPUColorTargetState colorTarget = {
+    .format = swapChainFormat,
+    .blend = &blend,
+    .writeMask = WGPUColorWriteMask_All,
+  };
+  WGPUFragmentState fragment = {
+    .module = fsmod,
+    .entryPoint = "main",
+    .targetCount = 1,
+    .targets = &colorTarget,
+  };
 
-  WGPUColorTargetState colorTarget = {};
-  colorTarget.format = swapChainFormat;
-  colorTarget.blend = &blend;
-  colorTarget.writeMask = WGPUColorWriteMask_All;
-
-  WGPUFragmentState fragment = {};
-  fragment.module = fsmod;
-  fragment.entryPoint = "main";
-  fragment.targetCount = 1;
-  fragment.targets = &colorTarget;
-  pd.fragment = &fragment;
-
-  // Other state
-  pd.layout = NULL;
-  pd.depthStencil = NULL;
-
-  pd.vertex.module = vsmod;
-  pd.vertex.entryPoint = "main";
-  pd.vertex.bufferCount = 0;
-  pd.vertex.buffers = NULL;
-
-  pd.multisample.count = 1;
-  pd.multisample.mask = 0xFFFFFFFF;
-  pd.multisample.alphaToCoverageEnabled = false;
-
-  pd.primitive.frontFace = WGPUFrontFace_CCW;
-  pd.primitive.cullMode = WGPUCullMode_None;
-  pd.primitive.topology = WGPUPrimitiveTopology_TriangleList;
-  pd.primitive.stripIndexFormat = WGPUIndexFormat_Undefined;
+  WGPURenderPipelineDescriptor pd = {
+    .vertex = {
+      .module = vsmod,
+      .entryPoint = "main",
+    },
+    .primitive = {
+      .frontFace = WGPUFrontFace_CCW,
+      .cullMode = WGPUCullMode_None,
+      .topology = WGPUPrimitiveTopology_TriangleList,
+      .stripIndexFormat = WGPUIndexFormat_Undefined,
+    },
+    .multisample = {
+      .count = 1,
+      .mask = 0xFFFFFFFF,
+      .alphaToCoverageEnabled = false,
+    },
+    .fragment = &fragment,
+  };
 
   return wgpuDeviceCreateRenderPipeline(device, &pd);
 }
@@ -79,18 +87,19 @@ void hello_triangle_set_device(WGPUDevice device) {
 
   WGPUShaderModule vsmod = create_wgsl_shader(device,
     "[[stage(vertex)]] fn main(\n"
-    "    [[builtin(vertex_index)]] VertexIndex : u32\n"
-    ") -> [[builtin(position)]] vec4<f32> {\n"
-    "    var pos = array<vec2<f32>, 3>(\n"
-    "        vec2<f32>( 0.0,  0.5),\n"
-    "        vec2<f32>(-0.5, -0.5),\n"
-    "        vec2<f32>( 0.5, -0.5));\n"
-    "    return vec4<f32>(pos[VertexIndex], 0.0, 1.0);\n"
+    "  [[builtin(vertex_index)]] VertexIndex : u32\n"
+    ") -> [[builtin(position)]] vec4<f32>\n"
+    "{\n"
+    "  var pos = array<vec2<f32>, 3>(\n"
+    "    vec2<f32>( 0.0,  0.5),\n"
+    "    vec2<f32>(-0.5, -0.5),\n"
+    "    vec2<f32>( 0.5, -0.5));\n"
+    "  return vec4<f32>(pos[VertexIndex], 0.0, 1.0);\n"
     "}\n");
 
   WGPUShaderModule fsmod = create_wgsl_shader(device,
     "[[stage(fragment)]] fn main() -> [[location(0)]] vec4<f32> {\n"
-    "    return vec4<f32>(1.0, 0.8, 0.0, 1.0);\n"
+    "  return vec4<f32>(1.0, 0.8, 0.0, 1.0);\n"
     "}\n");
 
   if (g_pipeline)
@@ -120,10 +129,6 @@ void hello_triangle_set_surface(WGPUSurface surface) {
   g_swapchain = wgpuDeviceCreateSwapChain(g_device, surface, &scdesc);
 }
 
-#define fabs __builtin_fabs
-#define sinf __builtin_sinf
-#define cosf __builtin_cosf
-
 
 void hello_triangle_render() {
   static u32 fc = 0;
@@ -134,36 +139,39 @@ void hello_triangle_render() {
   float BLUE  = fabs(cosf((float)(fc*2) / 80.0f));
 
   WGPUTextureView backbufferView = wgpuSwapChainGetCurrentTextureView(g_swapchain);
-  WGPURenderPassDescriptor renderpassInfo = {};
-  WGPURenderPassColorAttachment colorAttachment = {};
-  {
-    colorAttachment.view = backbufferView;
-    colorAttachment.resolveTarget = NULL;
-    // colorAttachment.clearColor = (WGPUColor){0.05f, 0.1f, 0.1f, 0.0f};
-    colorAttachment.clearColor = (WGPUColor){RED, GREEN, BLUE, 0.0f};
-    colorAttachment.loadOp = WGPULoadOp_Clear;
-    colorAttachment.storeOp = WGPUStoreOp_Store;
-    renderpassInfo.colorAttachmentCount = 1;
-    renderpassInfo.colorAttachments = &colorAttachment;
-    renderpassInfo.depthStencilAttachment = NULL;
-  }
-  WGPUCommandBuffer commands;
-  {
-    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(g_device, NULL);
+  WGPURenderPassColorAttachment colorAttachment = {
+    .view = backbufferView,
+    .clearColor = (WGPUColor){RED, GREEN, BLUE, 0.0f},
+    .loadOp = WGPULoadOp_Clear,
+    .storeOp = WGPUStoreOp_Store,
+  };
+  WGPURenderPassDescriptor renderpassInfo = {
+    .colorAttachmentCount = 1,
+    .colorAttachments = &colorAttachment,
+    .depthStencilAttachment = NULL,
+  };
 
-    WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &renderpassInfo);
-    wgpuRenderPassEncoderSetPipeline(pass, g_pipeline);
-    wgpuRenderPassEncoderDraw(pass, 3, 1, 0, 0);
-    wgpuRenderPassEncoderEndPass(pass);
-    wgpuRenderPassEncoderRelease(pass);
+  // acquire a command encoder
+  WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(g_device, NULL);
 
-    commands = wgpuCommandEncoderFinish(encoder, NULL);
-    wgpuCommandEncoderRelease(encoder);
-  }
+  // execute a render pass, writing commands to encoder
+  WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &renderpassInfo);
+  wgpuRenderPassEncoderSetPipeline(pass, g_pipeline);
+  wgpuRenderPassEncoderDraw(pass, 3, 1, 0, 0);
+  wgpuRenderPassEncoderEndPass(pass);
+  wgpuRenderPassEncoderRelease(pass);
 
+  // get commands buffered in the encoder
+  WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, NULL);
+  wgpuCommandEncoderRelease(encoder);
+
+  // send commands to device
   WGPUQueue queue = wgpuDeviceGetQueue(g_device);
   wgpuQueueSubmit(queue, 1, &commands);
   wgpuCommandBufferRelease(commands);
+
+  // show the new frame we drew on screen
   wgpuSwapChainPresent(g_swapchain);
+
   wgpuTextureViewRelease(backbufferView);
 }

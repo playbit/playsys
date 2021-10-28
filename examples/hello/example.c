@@ -18,10 +18,6 @@ PUB int main(int argc, const char** argv) {
   u8* buf[256];
   read_file("/sys/uname", buf, sizeof(buf));
 
-  // sys_fd pwgpu_fd = open("/sys/wgpu", sys_open_rw, 0);
-  // check_status(pwgpu_fd, "open /sys/wgpu");
-  // print("opened wgpu connection (handle ", pwgpu_fd, ")\n");
-
   // WebGPU concepts
   //   device
   //     Virtual GPU device which may map to a hardware GPU adapter.
@@ -69,11 +65,10 @@ PUB int main(int argc, const char** argv) {
       break; // surface closed
   }
 
-  // pwgpu_ctx_dispose(ctx);
-
   // print("sleeping for 200ms\n");
   // sys_sleep(0, 200000000); // 200ms
-  print("closing wgpu handles\n");
+
+  pwgpu_ctx_dispose(ctx);
   check_status(close(pwgpu_surf), "close(pwgpu_surf)");
   check_status(close(pwgpu_dev), "close(pwgpu_dev)");
 
