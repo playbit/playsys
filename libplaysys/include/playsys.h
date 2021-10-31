@@ -1,33 +1,29 @@
 // Copyright 2021 The PlaySys Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
-// See http://www.apache.org/licenses/LICENSE-2.0
+// See http://www.apache.org/licenses/LICEnsE-2.0
 
 #pragma once
 
 #if __has_attribute(warn_unused_result)
-  #define SYS_WUNUSED __attribute__((warn_unused_result))
+  #define PSYS_WARN_UNUSED __attribute__((warn_unused_result))
 #else
-  #define SYS_WUNUSED
+  #define PSYS_WARN_UNUSED
 #endif
 
 #if __has_attribute(unused)
-  #define SYS_UNUSED __attribute__((unused))
+  #define PSYS_UNUSED __attribute__((unused))
 #else
-  #define SYS_UNUSED
+  #define PSYS_UNUSED
 #endif
 
 #ifdef __cplusplus
-  #define SYS_EXTERN extern "C"
+  #define PSYS_EXTERN extern "C"
 #else
-  #define SYS_EXTERN extern
+  #define PSYS_EXTERN extern
 #endif
 
-#define SYS_MSG_ALIGN 64 /* should match line cache */
-#define SYS_MSG_STRUCT_ATTR  __attribute__((aligned(SYS_MSG_ALIGN)))
-
-// ---------------------------------------------------------------
-
+// types
 typedef signed char        i8;
 typedef unsigned char      u8;
 typedef signed short       i16;
@@ -41,75 +37,114 @@ typedef unsigned long      usize;
 typedef float              f32;
 typedef double             f64;
 
-// ---------------------------------------------------------------
+typedef usize psysop_t; // syscall operation code
+typedef usize oflag_t;  // flags to openat syscall
+typedef isize err_t;    // error code. Only negative values.
+typedef isize fd_t;     // file descriptor
 
-typedef isize sys_ret;
-typedef isize sys_fd;
-typedef void (*sys_callback_fn)(sys_ret result, void* userdata);
+// constants
+#define P_FDSTDIN  ((fd_t)(0))    // input stream
+#define P_FDSTDOUT ((fd_t)(1))    // main output stream
+#define P_FDSTDERR ((fd_t)(2))    // logging output stream
+#define P_AT_FDCWD ((fd_t)(-100)) // "current directory" for *at file operations
 
-typedef u32 sys_opcode;
-enum _sys_opcode {
-  sys_op_init,   // sys_callback f, void* userdata
-  sys_op_test,   // sys_opcode op
-  sys_op_exit,   // int status_code
-  sys_op_openat, // sys_fd fd, const char* path, usize flags, isize mode
-  sys_op_close,  // sys_fd fd
-  sys_op_read,   // sys_fd fd, void* data, usize size
-  sys_op_write,  // sys_fd fd, const void* data, usize size
-  sys_op_sleep,  // usize seconds, usize nanoseconds
+// errors (possible values of type err_t)
+enum _p_err {
+  p_err_none          =   0, // no error
+  p_err_badfd         =  -1, // invalid file descriptor
+  p_err_invalid       =  -2, // invalid data or argument
+  p_err_sys_op        =  -3, // invalid syscall op or syscall op data
+  p_err_bad_name      =  -4, // invalid or misformed name
+  p_err_not_found     =  -5, // resource not found
+  p_err_name_too_long =  -6,
+  p_err_canceled      =  -7, // operation canceled
+  p_err_not_supported =  -8, // functionality not supported
+  p_err_exists        =  -9, // already exists
+  p_err_end           = -10, // end of resource
+  p_err_access        = -11, // permission denied
 };
 
-typedef u32 sys_err;
-enum _sys_err {
-  sys_err_none,      // no error
-  sys_err_badfd,     // invalid file descriptor
-  sys_err_invalid,   // invalid data or argument
-  sys_err_sys_op,    // invalid syscall op or syscall op data
-  sys_err_bad_name,
-  sys_err_not_found,
-  sys_err_name_too_long,
-  sys_err_canceled,      // operation canceled
-  sys_err_not_supported, // functionality not supported
-  sys_err_exists,        // already exists
-  sys_err_end,           // e.g. EOF
-  sys_err_access,        // permission denied
+// open flags (possible bits of type oflag_t)
+enum _p_oflag {
+  p_open_ronly  = 0,  // Open for reading only
+  p_open_wonly  = 1,  // Open for writing only
+  p_open_rw     = 2,  // Open for both reading and writing
+  p_open_append = 4,  // Start writing at end (seekable files only)
+  p_open_create = 8,  // Create file if it does not exist
+  p_open_trunc  = 16, // Set file size to zero
+  p_open_excl   = 32, // fail if file exists when create and excl are set
 };
 
-typedef u32 sys_open_flags;
-enum _sys_open_flags {
-  sys_open_ronly  = 0,
-  sys_open_wonly  = 1,
-  sys_open_rw     = 2,
-  sys_open_append = 1 << 2,
-  sys_open_create = 1 << 3,
-  sys_open_trunc  = 1 << 4,
-  sys_open_excl   = 1 << 5,
+// syscall operations (possible values of type psysop_t)
+enum _p_sysop {
+  p_sysop_openat   = 257,   // base fd, path cstr, flags oflag, mode usize
+  p_sysop_close    = 3,     // fd fd
+  p_sysop_read     = 0,     // fd fd, data mutptr, nbyte usize
+  p_sysop_write    = 1,     // fd fd, data ptr, nbyte usize
+  p_sysop_seek     = 8,     // TODO
+  p_sysop_statat   = 262,   // TODO (newfstatat in linux, alt: statx 332)
+  p_sysop_removeat = 263,   // base fd, path cstr, flags usize
+  p_sysop_renameat = 264,   // oldbase fd, oldpath cstr, newbase fd, newpath cstr
+  p_sysop_sleep    = 230,   // seconds usize, nanoseconds usize
+  p_sysop_exit     = 60,    // status_code i32
+  p_sysop_test     = 10000, // op psysop
 };
 
-sys_ret sys_syscall(sys_opcode, isize, isize, isize, isize, isize) SYS_WUNUSED;
+// p_syscall calls the host system
+PSYS_EXTERN isize p_syscall(psysop_t,isize,isize,isize,isize,isize) PSYS_WARN_UNUSED;
+static isize p_syscall_openat(fd_t base, const char* path, oflag_t flags, usize mode);
+static isize p_syscall_close(fd_t fd);
+static isize p_syscall_read(fd_t fd, const void* data, usize nbyte);
+static isize p_syscall_write(fd_t fd, void* data, usize nbyte);
+static isize p_syscall_removeat(fd_t base, const char* path, usize flags);
+static isize p_syscall_renameat(fd_t oldbase, const char* oldpath, fd_t newbase,
+  const char* newpath);
+static isize p_syscall_sleep(usize seconds, usize nanoseconds);
+static isize p_syscall_exit(i32 status_code);
+static isize p_syscall_test(psysop_t op);
 
-// ---------------------------------------------------------------
+#define _p_syscall0 \
+  ((isize(*)(psysop_t))p_syscall)
+#define _p_syscall1 \
+  ((isize(*)(psysop_t,isize))p_syscall)
+#define _p_syscall2 \
+  ((isize(*)(psysop_t,isize,isize))p_syscall)
+#define _p_syscall3 \
+  ((isize(*)(psysop_t,isize,isize,isize))p_syscall)
+#define _p_syscall4 \
+  ((isize(*)(psysop_t,isize,isize,isize,isize))p_syscall)
+#define _p_syscall5 \
+  ((isize(*)(psysop_t,isize,isize,isize,isize,isize))p_syscall)
 
-#define SYS_FD_STDIN  ((sys_fd)0)
-#define SYS_FD_STDOUT ((sys_fd)1)
-#define SYS_FD_STDERR ((sys_fd)2)
+inline static isize p_syscall_openat(fd_t base, const char* path, oflag_t flags,
+  usize mode) {
+  return _p_syscall4(p_sysop_openat, (isize)base, (isize)path, (isize)flags, (isize)mode);
+}
+inline static isize p_syscall_close(fd_t fd) {
+  return _p_syscall1(p_sysop_close, (isize)fd);
+}
+inline static isize p_syscall_read(fd_t fd, const void* data, usize nbyte) {
+  return _p_syscall3(p_sysop_read, (isize)fd, (isize)data, (isize)nbyte);
+}
+inline static isize p_syscall_write(fd_t fd, void* data, usize nbyte) {
+  return _p_syscall3(p_sysop_write, (isize)fd, (isize)data, (isize)nbyte);
+}
+inline static isize p_syscall_removeat(fd_t base, const char* path, usize flags) {
+  return _p_syscall3(p_sysop_removeat, (isize)base, (isize)path, (isize)flags);
+}
+inline static isize p_syscall_renameat(fd_t oldbase, const char* oldpath, fd_t newbase,
+  const char* newpath) {
+  return _p_syscall4(p_sysop_renameat, (isize)oldbase, (isize)oldpath, (isize)newbase,
+    (isize)newpath);
+}
+inline static isize p_syscall_sleep(usize seconds, usize nanoseconds) {
+  return _p_syscall2(p_sysop_sleep, (isize)seconds, (isize)nanoseconds);
+}
+inline static isize p_syscall_exit(i32 status_code) {
+  return _p_syscall1(p_sysop_exit, (isize)status_code);
+}
+inline static isize p_syscall_test(psysop_t op) {
+  return _p_syscall1(p_sysop_test, (isize)op);
+}
 
-#define SYS_AT_FDCWD -100 // value from musl
-
-// syscall call helpers
-#define sys_syscall0(op) \
-  ((sys_ret(*)(sys_opcode))sys_syscall)(op)
-#define sys_syscall1(op, arg1) \
-  ((sys_ret(*)(sys_opcode,isize))sys_syscall)(op, (isize)(arg1))
-#define sys_syscall2(op, arg1, arg2) \
-  ((sys_ret(*)(sys_opcode,isize,isize))sys_syscall)(op, \
-    (isize)(arg1), (isize)(arg2))
-#define sys_syscall3(op, arg1, arg2, arg3) \
-  ((sys_ret(*)(sys_opcode,isize,isize,isize))sys_syscall)(op, \
-    (isize)(arg1), (isize)(arg2), (isize)(arg3))
-#define sys_syscall4(op, arg1, arg2, arg3, arg4) \
-  ((sys_ret(*)(sys_opcode,isize,isize,isize,isize))sys_syscall)(op, \
-    (isize)(arg1), (isize)(arg2), (isize)(arg3), (isize)(arg4))
-#define sys_syscall5(op, arg1, arg2, arg3, arg4, arg5) \
-  ((sys_ret(*)(sys_opcode,isize,isize,isize,isize,isize))sys_syscall)(op, \
-    (isize)(arg1), (isize)(arg2), (isize)(arg3), (isize)(arg4), (isize)(arg5))
+// Note: this file is generated from spec.md; edit with caution

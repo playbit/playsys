@@ -17,7 +17,7 @@
 struct pwgpu_dev {
   // fd is "our end" of the open("/sys/wgpu") syscall.
   // It is a read-write, non-seekable stream (UNIX socket)
-  sys_fd fd;
+  fd_t fd;
 
   dawn_native::Adapter adapter;
   wgpu::Device         device;
@@ -64,7 +64,7 @@ struct pwgpu_res_t {
 static DawnProcTable gNativeProcs;
 static dawn_native::Instance gDawnNative;
 
-static std::map<sys_fd,pwgpu_res_t> gOpenResources;
+static std::map<fd_t,pwgpu_res_t> gOpenResources;
 
 
 // helper functions defined at end of file
@@ -138,7 +138,7 @@ static bool select_adapter(pwgpu_dev_t* c, pwgpu_dev_flag_t fl) {
 }
 
 
-pwgpu_dev_t* pwgpu_dev_open(sys_fd fd, sys_fd fd_user, int adapter_id, pwgpu_dev_flag_t fl) {
+pwgpu_dev_t* pwgpu_dev_open(fd_t fd, fd_t fd_user, int adapter_id, pwgpu_dev_flag_t fl) {
   pwgpu_init();
 
   pwgpu_dev_t* c = new pwgpu_dev_t();
@@ -177,7 +177,7 @@ void pwgpu_dev_close(pwgpu_dev_t* c) {
 }
 
 
-pwgpu_surface_t* pwgpu_surface_open(sys_fd fd, sys_fd fd_user) {
+pwgpu_surface_t* pwgpu_surface_open(fd_t fd, fd_t fd_user) {
   pwgpu_init();
   pwgpu_surface_t* surf = new pwgpu_surface_t();
   memset(surf, 0, sizeof(pwgpu_surface_t));
@@ -198,7 +198,7 @@ void pwgpu_surface_close(pwgpu_surface_t* surf) {
 }
 
 
-sys_ret _pwgpu_surface_init(pwgpu_surface_t* surf) {
+isize _pwgpu_surface_init(pwgpu_surface_t* surf) {
   u32 width = 640;
   u32 height = 480;
   const char* title = "";
@@ -210,7 +210,7 @@ sys_ret _pwgpu_surface_init(pwgpu_surface_t* surf) {
   u8 buf[128] = {0};
   isize len = read(surf->fd, buf, sizeof(buf));
   if (len < 0)
-    return -sys_err_not_supported;
+    return p_err_not_supported;
   // dlog("read: '%.*s'", (int)len, buf);
   const u8* bufend = buf + len;
   u8* bufnext = buf;
@@ -221,12 +221,12 @@ sys_ret _pwgpu_surface_init(pwgpu_surface_t* surf) {
     if (strcmp("width", key) == 0) {
       long n = strtol(value, NULL, 10);
       if (n < 0 || n > 0x7FFFFFFF)
-        return -sys_err_not_supported;
+        return p_err_not_supported;
       width = (u32)n;
     } else if (strcmp("height", key) == 0) {
       long n = strtol(value, NULL, 10);
       if (n < 0 || n > 0x7FFFFFFF)
-        return -sys_err_not_supported;
+        return p_err_not_supported;
       height = (u32)n;
     } else if (strcmp("title", key) == 0) {
       title = value;
@@ -234,7 +234,7 @@ sys_ret _pwgpu_surface_init(pwgpu_surface_t* surf) {
   }
 
   // create host OS window or surface (e.g. glfwCreateWindow)
-  sys_ret r = _pwgpu_surface_init_oswin(surf, width, height, title);
+  isize r = _pwgpu_surface_init_oswin(surf, width, height, title);
   if (r != 0)
     return r;
 
@@ -246,7 +246,7 @@ sys_ret _pwgpu_surface_init(pwgpu_surface_t* surf) {
   dlog("WGPUSurface %p", surf->surface.Get());
   if (!surf->surface) {
     errlog("dawn: failed to create surface for dawn-native instance");
-    return -sys_err_not_supported;
+    return p_err_not_supported;
   }
 
   surf->state = WGPU_SURF_STATE_ACTIVE;
@@ -281,21 +281,21 @@ void pwgpu_ctx_dispose(pwgpu_ctx_t* ctx) {
 }
 
 
-WGPUDevice pwgpu_ctx_set_device(pwgpu_ctx_t* ctx, sys_fd user_fd) {
+WGPUDevice pwgpu_ctx_set_device(pwgpu_ctx_t* ctx, fd_t user_fd) {
   auto it = gOpenResources.find(user_fd);
   if (it == gOpenResources.end() || it->second.type != WGPU_RES_DEVICE)
     return nullptr;
   return it->second.dev->device.Get();
 }
 
-WGPUSurface pwgpu_ctx_set_surface(pwgpu_ctx_t* ctx, sys_fd user_fd) {
+WGPUSurface pwgpu_ctx_set_surface(pwgpu_ctx_t* ctx, fd_t user_fd) {
   auto it = gOpenResources.find(user_fd);
   if (it == gOpenResources.end() || it->second.type != WGPU_RES_SURFACE)
     return nullptr;
 
   pwgpu_surface_t* surf = it->second.surf;
   if (surf->state == WGPU_SURF_STATE_INIT) {
-    sys_ret r = _pwgpu_surface_init(surf);
+    isize r = _pwgpu_surface_init(surf);
     if (r != 0)
       return nullptr;
   }
@@ -305,7 +305,7 @@ WGPUSurface pwgpu_ctx_set_surface(pwgpu_ctx_t* ctx, sys_fd user_fd) {
 
 // ————————————————————————————————————————————————————————————————————————————————————
 
-sys_ret pwgpu_ctl_open(pwgpu_ctl_t** result, sys_fd fd) {
+isize pwgpu_ctl_open(pwgpu_ctl_t** result, fd_t fd) {
   pwgpu_init();
   pwgpu_ctl_t* ctl = new pwgpu_ctl(fd, &gNativeProcs);
   ctl->inbuf.reserve(4096 * 32);
@@ -315,27 +315,27 @@ sys_ret pwgpu_ctl_open(pwgpu_ctl_t** result, sys_fd fd) {
 }
 
 
-sys_ret pwgpu_ctl_close(pwgpu_ctl_t* ctl) {
+isize pwgpu_ctl_close(pwgpu_ctl_t* ctl) {
   delete ctl;
   return 0;
 }
 
 
-sys_ret pwgpu_ctl_read(pwgpu_ctl_t* ctl, void* data, usize size) {
+isize pwgpu_ctl_read(pwgpu_ctl_t* ctl, void* data, usize size) {
   // handle incoming commands from client, previously queued with write()
   size_t inlen = ctl->inbuf.size();
   if (inlen > 0) {
     if (ctl->wire_server.HandleCommands((const char*)ctl->inbuf.data(), inlen) == nullptr) {
       dlog("wire_server.HandleCommands FAILED");
       // close();
-      return -sys_err_canceled;
+      return p_err_canceled;
     }
     ctl->inbuf.resize(0);
     // at this point
     // TODO: send back changes
     // if (!_proto.Flush()) {
     //   dlog("_proto.Flush() FAILED");
-    //   return -sys_err_canceled;
+    //   return p_err_canceled;
     // }
   }
 
@@ -343,7 +343,7 @@ sys_ret pwgpu_ctl_read(pwgpu_ctl_t* ctl, void* data, usize size) {
 }
 
 
-sys_ret pwgpu_ctl_write(pwgpu_ctl_t*, const void* data, usize size) {
+isize pwgpu_ctl_write(pwgpu_ctl_t*, const void* data, usize size) {
   // TODO
   return size;
 }
@@ -396,7 +396,7 @@ struct pwgpu_api : public dawn_wire::CommandSerializer {
   bool Flush() override;
 };
 
-pwgpu_api_t* pwgpu_api_create(sys_fd fd, void* mem) {
+pwgpu_api_t* pwgpu_api_create(fd_t fd, void* mem) {
   dlog("sizeof(pwgpu_api) %zu", sizeof(pwgpu_api));
   static_assert(PWGPU_API_STRUCT_SIZE >= sizeof(pwgpu_api), "update PWGPU_API_STRUCT_SIZE");
   // void* mem = allocf(1, sizeof(pwgpu_api));

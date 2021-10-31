@@ -25,32 +25,32 @@ typedef void* (*pwgpu_memalloc_t)(usize count, usize nbyte);
 typedef void  (*pwgpu_memfree_t)(void* ptr);
 
 // adapter_id<0 means "auto"
-SYS_EXTERN pwgpu_dev_t* pwgpu_dev_open(sys_fd fd, sys_fd fd_user, int adapter, pwgpu_dev_flag_t);
-SYS_EXTERN void pwgpu_dev_close(pwgpu_dev_t*);
+PSYS_EXTERN pwgpu_dev_t* pwgpu_dev_open(fd_t, fd_t fd_user, int adapter, pwgpu_dev_flag_t);
+PSYS_EXTERN void pwgpu_dev_close(pwgpu_dev_t*);
 
-SYS_EXTERN pwgpu_surface_t* pwgpu_surface_open(sys_fd fd, sys_fd fd_user);
-SYS_EXTERN sys_ret pwgpu_surface_read(pwgpu_surface_t*, void* data, usize size);
-SYS_EXTERN void pwgpu_surface_close(pwgpu_surface_t*);
+PSYS_EXTERN pwgpu_surface_t* pwgpu_surface_open(fd_t, fd_t fd_user);
+PSYS_EXTERN isize pwgpu_surface_read(pwgpu_surface_t*, void* data, usize size);
+PSYS_EXTERN void pwgpu_surface_close(pwgpu_surface_t*);
 
-SYS_EXTERN sys_ret pwgpu_ctl_open(pwgpu_ctl_t** result, sys_fd fd);
-SYS_EXTERN sys_ret pwgpu_ctl_read(pwgpu_ctl_t*, void* data, usize size);
-SYS_EXTERN sys_ret pwgpu_ctl_write(pwgpu_ctl_t*, const void* data, usize size);
-SYS_EXTERN sys_ret pwgpu_ctl_close(pwgpu_ctl_t*);
+PSYS_EXTERN isize pwgpu_ctl_open(pwgpu_ctl_t** result, fd_t);
+PSYS_EXTERN isize pwgpu_ctl_read(pwgpu_ctl_t*, void* data, usize size);
+PSYS_EXTERN isize pwgpu_ctl_write(pwgpu_ctl_t*, const void* data, usize size);
+PSYS_EXTERN isize pwgpu_ctl_close(pwgpu_ctl_t*);
 
 
 // dawn_wire impl (WIP)
 
 #define PWGPU_API_STRUCT_SIZE 128
 
-SYS_EXTERN pwgpu_api_t* pwgpu_api_create(sys_fd ctl_fd, void* mem);
-SYS_EXTERN void pwgpu_api_sync(pwgpu_api_t*);
-SYS_EXTERN void pwgpu_api_dispose(pwgpu_api_t*);
+PSYS_EXTERN pwgpu_api_t* pwgpu_api_create(fd_t ctl_fd, void* mem);
+PSYS_EXTERN void pwgpu_api_sync(pwgpu_api_t*);
+PSYS_EXTERN void pwgpu_api_dispose(pwgpu_api_t*);
 
-SYS_EXTERN WGPUDevice pwgpu_api_alloc_device(pwgpu_api_t*);
-SYS_EXTERN void pwgpu_api_release_device(pwgpu_api_t*, WGPUDevice);
+PSYS_EXTERN WGPUDevice pwgpu_api_alloc_device(pwgpu_api_t*);
+PSYS_EXTERN void pwgpu_api_release_device(pwgpu_api_t*, WGPUDevice);
 
-SYS_EXTERN WGPUTexture pwgpu_api_alloc_texture(pwgpu_api_t*, WGPUDevice);
-SYS_EXTERN void pwgpu_api_release_texture(pwgpu_api_t*, WGPUTexture);
+PSYS_EXTERN WGPUTexture pwgpu_api_alloc_texture(pwgpu_api_t*, WGPUDevice);
+PSYS_EXTERN void pwgpu_api_release_texture(pwgpu_api_t*, WGPUTexture);
 
-SYS_EXTERN WGPUSwapChain pwgpu_api_alloc_swapchain(pwgpu_api_t*, WGPUDevice);
-SYS_EXTERN void pwgpu_api_release_swapchain(pwgpu_api_t*, WGPUSwapChain);
+PSYS_EXTERN WGPUSwapChain pwgpu_api_alloc_swapchain(pwgpu_api_t*, WGPUDevice);
+PSYS_EXTERN void pwgpu_api_release_swapchain(pwgpu_api_t*, WGPUSwapChain);

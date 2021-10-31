@@ -46,9 +46,9 @@ void print_sint(i64 v, u32 base);
 void print_uint(u64 v, u32 base);
 inline static void print_sint10(i64 v) { print_sint(v, 10); }
 inline static void print_uint10(u64 v) { print_uint(v, 10); }
-inline static isize write_cstr(sys_fd fd, const char* s) { return write(fd, s, strlen(s)); }
+inline static isize write_cstr(fd_t fd, const char* s) { return write(fd, s, strlen(s)); }
 
-void check_status(sys_ret r, const char* contextmsg);
+void check_status(isize r, const char* contextmsg);
 
 void hello_triangle_set_device(WGPUDevice);
 void hello_triangle_set_surface(WGPUSurface);

@@ -56,7 +56,11 @@ if [ "$CMD" = "watch" ]; then
     fswatch --one-event --extended --latency=0.2 \
             --exclude='.*' --include='\.(c|h|syms|ninja|a|dylib|so)$' \
             . \
-            ../../libplaywgpu/out/debug
+            ../../libplaywgpu/out/debug \
+            ../../libplaywgpu/include \
+            ../../libplaywgpu/src/*wasm* \
+            ../../libplaysys/include \
+            ../../libplaysys/src/*wasm*
   done
 else
   ninja "$@"

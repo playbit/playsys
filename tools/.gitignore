@@ -1,0 +1,4 @@
+/build.ninja
+/.ninja*
+/specgen/specgen
+**/*.dSYM

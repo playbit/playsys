@@ -2,6 +2,15 @@
 #include <playwgpu.h>
 #include "hello.h"
 
+
+#ifdef __wasm__
+// stub out this for wasm to get the build working sooner
+void hello_triangle_set_device(WGPUDevice device) {}
+void hello_triangle_set_surface(WGPUSurface surface) {}
+void hello_triangle_render() {}
+#else
+
+
 // we have no libc, but llvm has most math functions built-in
 #define fabs __builtin_fabs
 #define sinf __builtin_sinf
@@ -131,12 +140,18 @@ void hello_triangle_set_surface(WGPUSurface surface) {
 
 
 void hello_triangle_render() {
-  static u32 fc = 0;
-  fc++;
-
-  float RED   = fabs(sinf((float)(fc*2) / 100.0f));
-  float GREEN = fabs(sinf((float)(fc*2) / 50.0f));
-  float BLUE  = fabs(cosf((float)(fc*2) / 80.0f));
+  #ifdef __wasm__
+    // no __builtin_{sinf,cosf} in llvm wasm
+    float RED   = 0.0f;
+    float GREEN = 0.1f;
+    float BLUE  = 0.1f;
+  #else
+    static u32 fc = 0;
+    fc++;
+    float RED   = fabs(sinf((float)(fc*2) / 100.0f));
+    float GREEN = fabs(sinf((float)(fc*2) / 50.0f));
+    float BLUE  = fabs(cosf((float)(fc*2) / 80.0f));
+  #endif
 
   WGPUTextureView backbufferView = wgpuSwapChainGetCurrentTextureView(g_swapchain);
   WGPURenderPassColorAttachment colorAttachment = {
@@ -175,3 +190,6 @@ void hello_triangle_render() {
 
   wgpuTextureViewRelease(backbufferView);
 }
+
+
+#endif // __wasm__

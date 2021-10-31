@@ -1,0 +1,79 @@
+// Copyright 2021 The PlaySys Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// See http://www.apache.org/licenses/LICEnsE-2.0
+
+#pragma once
+
+#if __has_attribute(warn_unused_result)
+  #define ${NS2}WARN_UNUSED __attribute__((warn_unused_result))
+#else
+  #define ${NS2}WARN_UNUSED
+#endif
+
+#if __has_attribute(unused)
+  #define ${NS2}UNUSED __attribute__((unused))
+#else
+  #define ${NS2}UNUSED
+#endif
+
+#ifdef __cplusplus
+  #define ${NS2}EXTERN extern "C"
+#else
+  #define ${NS2}EXTERN extern
+#endif
+
+// types
+typedef signed char        i8;
+typedef unsigned char      u8;
+typedef signed short       i16;
+typedef unsigned short     u16;
+typedef signed int         i32;
+typedef unsigned int       u32;
+typedef signed long long   i64;
+typedef unsigned long long u64;
+typedef signed long        isize;
+typedef unsigned long      usize;
+typedef float              f32;
+typedef double             f64;
+
+$TYPES
+
+// constants
+$CONSTANTS
+
+// errors (possible values of type ${err})
+enum _${ns}err {
+$ERR_ENUM
+};
+
+// open flags (possible bits of type ${oflag})
+enum _${ns}oflag {
+$OFLAG_ENUM
+};
+
+// syscall operations (possible values of type ${psysop})
+enum _${ns}sysop {
+$SYSOP_ENUM
+};
+
+// ${ns}syscall calls the host system
+${NS2}EXTERN isize ${ns}syscall(${psysop},isize,isize,isize,isize,isize) ${NS2}WARN_UNUSED;
+$SYSCALL_FN_PROTOTYPES
+
+#define _${ns}syscall0 \
+  ((isize(*)(${psysop}))${ns}syscall)
+#define _${ns}syscall1 \
+  ((isize(*)(${psysop},isize))${ns}syscall)
+#define _${ns}syscall2 \
+  ((isize(*)(${psysop},isize,isize))${ns}syscall)
+#define _${ns}syscall3 \
+  ((isize(*)(${psysop},isize,isize,isize))${ns}syscall)
+#define _${ns}syscall4 \
+  ((isize(*)(${psysop},isize,isize,isize,isize))${ns}syscall)
+#define _${ns}syscall5 \
+  ((isize(*)(${psysop},isize,isize,isize,isize,isize))${ns}syscall)
+
+$SYSCALL_FN_IMPLS
+
+// Note: this file is generated from spec.md; edit with caution

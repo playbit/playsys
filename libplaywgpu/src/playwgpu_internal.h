@@ -48,7 +48,7 @@ typedef enum {
 typedef struct GLFWwindow GLFWwindow;
 
 struct pwgpu_surface {
-  sys_fd                fd; // "our end" of the read-write, non-seekable stream
+  fd_t                  fd; // "our end" of the read-write, non-seekable stream
   pwgpu_surface_state_t state;
   GLFWwindow*           window;
   wgpu::Surface         surface;
@@ -59,14 +59,14 @@ struct pwgpu_surface {
 
 
 struct pwgpu_ctl : public dawn_wire::CommandSerializer {
-  sys_fd fd; // "our end" of the read-write, non-seekable stream
+  fd_t fd; // "our end" of the read-write, non-seekable stream
 
   dawn_wire::WireServer wire_server;
 
   std::vector<u8> inbuf;  // client -> server
   std::vector<u8> outbuf; // server -> client
 
-  pwgpu_ctl(sys_fd fd_, const DawnProcTable* procs)
+  pwgpu_ctl(fd_t fd_, const DawnProcTable* procs)
     : fd(fd_)
     , wire_server({ .procs = procs, .serializer = this })
   {}
@@ -95,8 +95,8 @@ inline static wgpu::BackendType _pwgpu_backend_type() {
   #endif
 }
 
-sys_ret _pwgpu_surface_init(pwgpu_surface_t*);
-sys_ret _pwgpu_surface_init_oswin(pwgpu_surface_t*, u32 width, u32 height, const char* title);
+isize _pwgpu_surface_init(pwgpu_surface_t*);
+isize _pwgpu_surface_init_oswin(pwgpu_surface_t*, u32 width, u32 height, const char* title);
 void _pwgpu_surface_free_oswin(pwgpu_surface_t*);
 std::unique_ptr<wgpu::ChainedStruct> _pwgpu_surface_descriptor(pwgpu_surface_t*);
 

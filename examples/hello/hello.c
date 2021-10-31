@@ -4,17 +4,19 @@
 
 
 void read_file(const char* path, void* buf, usize cap) {
-  sys_fd fd      = open(path, sys_open_ronly, 0); check_status(fd, "open");
-  isize readlen  = read(fd, buf, cap);            check_status(readlen, "read");
-  sys_ret status = close(fd);                     check_status(status, "close");
+  fd_t fd       = open(path, p_open_ronly, 0); check_status(fd, "open");
+  isize readlen = read(fd, buf, cap);            check_status(readlen, "read");
+  err_t status  = close(fd);                     check_status(status, "close");
   print("read from file ", path, ": ");
-  write(SYS_FD_STDOUT, buf, readlen);
+  write(P_FDSTDOUT, buf, readlen);
   if (readlen > 0 && ((u8*)buf)[readlen - 1] != '\n')
     print("\n");
 }
 
 
 PUB int main(int argc, const char** argv) {
+  print("start\n");
+
   u8* buf[256];
   read_file("/sys/uname", buf, sizeof(buf));
 
@@ -29,14 +31,16 @@ PUB int main(int argc, const char** argv) {
   //     Has a fixed size specific to the actual backing texture of the surface.
   //
 
+  // #ifndef __wasm__
+
   // select a GPU device
-  sys_fd pwgpu_dev = open("/sys/wgpu/dev/gpu0", sys_open_ronly, 0);
+  fd_t pwgpu_dev = open("/sys/wgpu/dev/gpu0", p_open_ronly, 0);
   check_status(pwgpu_dev, "open /sys/wgpu/dev/gpu0");
   print("opened wgpu device (handle ", pwgpu_dev, ")\n");
-  // TODO: allow sys_open_rw on device to enable simple compute
+  // TODO: allow p_open_rw on device to enable simple compute
 
   // create a graphics surface
-  sys_fd pwgpu_surf = open("/sys/wgpu/surface", sys_open_rw, 0);
+  fd_t pwgpu_surf = open("/sys/wgpu/surface", p_open_rw, 0);
   check_status(pwgpu_surf, "open /sys/wgpu/surface");
   print("opened wgpu surface (handle ", pwgpu_surf, ")\n");
   write_cstr(pwgpu_surf,
@@ -72,6 +76,8 @@ PUB int main(int argc, const char** argv) {
   check_status(close(pwgpu_surf), "close(pwgpu_surf)");
   check_status(close(pwgpu_dev), "close(pwgpu_dev)");
 
+  // #endif // !defined(__wasm__)
+
   return 0;
 }
 
@@ -79,17 +85,17 @@ PUB int main(int argc, const char** argv) {
 // example helper functions
 
 void print_cstr(const char* str) {
-  write(SYS_FD_STDOUT, str, strlen(str));
+  write(P_FDSTDOUT, str, strlen(str));
 }
 
 void printerr(const char* str) {
-  write(SYS_FD_STDERR, str, strlen(str));
+  write(P_FDSTDERR, str, strlen(str));
 }
 
-void check_status(sys_ret r, const char* contextmsg) {
+void check_status(isize r, const char* contextmsg) {
   if (r < 0) {
-    sys_err err = (sys_err)-r;
-    const char* errname = sys_errname(err);
+    err_t err = (err_t)-r;
+    const char* errname = p_errname(err);
     printerr("error: "); printerr(errname);
     if (contextmsg && strlen(contextmsg)) {
       printerr(" ("); printerr(contextmsg); printerr(")\n");
@@ -130,7 +136,7 @@ static u32 fmtuint(char* buf, usize bufsize, u64 v, u32 base) {
 void print_uint(u64 v, u32 base) {
   char buf[21];
   u32 len = fmtuint(buf, sizeof(buf), v, base);
-  write(SYS_FD_STDOUT, buf, len);
+  write(P_FDSTDOUT, buf, len);
 }
 
 void print_sint(i64 v, u32 base) {
@@ -142,13 +148,13 @@ void print_sint(i64 v, u32 base) {
     u = (u64)-v;
   }
   u32 len = fmtuint(&buf[offs], sizeof(buf) - offs, u, base);
-  write(SYS_FD_STDOUT, buf, (usize)len + offs);
+  write(P_FDSTDOUT, buf, (usize)len + offs);
 }
 
 // // open a new WGPU context
-// sys_fd wgpu = open("/sys/wgpu", sys_open_rw, 0);
+// fd_t wgpu = open("/sys/wgpu", p_open_rw, 0);
 // check_status(wgpu, "open /sys/wgpu");
 // print("opened wgpu interface (handle ", wgpu, ")\n");
-// sys_fd device = openat(wgpu, "dev/gpu0", sys_open_ronly, 0);
-// sys_fd surface = openat(device, "surface", sys_open_rw, 0);
-// sys_fd swapchain = openat(surface, "swapchain", sys_open_rw, 0);
+// fd_t device = openat(wgpu, "dev/gpu0", p_open_ronly, 0);
+// fd_t surface = openat(device, "surface", p_open_rw, 0);
+// fd_t swapchain = openat(surface, "swapchain", p_open_rw, 0);

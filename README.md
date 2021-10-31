@@ -34,7 +34,7 @@ Building the example on macOS (>=10.15, x86_64) with WebGPU:
 cd path/to/playsys
 libplaywgpu/setup.sh
 libplaywgpu/build.sh
-examples/hello/build.sh -run out/example_mac_x64
+examples/hello/build.sh -run out/hello_mac_x64
 ```
 
 > Note: If you're having issues with clang/llvm, install a non-Apple version

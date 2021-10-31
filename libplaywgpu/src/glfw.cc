@@ -9,10 +9,10 @@
 #include <utils/GLFWUtils.h> /* from dawn */
 #include <dawn_native/DawnNative.h>
 
-sys_ret pwgpu_surface_read(pwgpu_surface_t* surf, void* data, usize size) {
+isize pwgpu_surface_read(pwgpu_surface_t* surf, void* data, usize size) {
   switch (surf->state) {
     case WGPU_SURF_STATE_INIT: {
-      sys_ret r = _pwgpu_surface_init(surf);
+      isize r = _pwgpu_surface_init(surf);
       if (r != 0)
         return r;
       break;
@@ -62,7 +62,7 @@ static void report_glfw_error(int code, const char* message) {
 }
 
 
-sys_ret _pwgpu_surface_init_oswin(
+isize _pwgpu_surface_init_oswin(
   pwgpu_surface_t* surf, u32 width, u32 height, const char* title)
 {
   static bool is_init = false;
@@ -99,7 +99,7 @@ sys_ret _pwgpu_surface_init_oswin(
   // create window
   surf->window = glfwCreateWindow((int)width, (int)height, title, NULL, NULL);
   if (!surf->window)
-    return -sys_err_invalid;
+    return p_err_invalid;
   glfwSetWindowUserPointer(surf->window, surf);
 
   // [rsms] move window to bottom right corner of screen

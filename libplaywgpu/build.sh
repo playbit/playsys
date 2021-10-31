@@ -48,7 +48,7 @@ export LD=$LLVM_PATH/bin/ld.lld
 export LDFLAGS="-L$LLVM_PATH/lib -Wl,-rpath,$LLVM_PATH/lib"
 export CPPFLAGS="-I$LLVM_PATH/include"
 
-if $OPT_CONFIG || [ ! -d "$OUT_DIR" ]; then
+if $OPT_CONFIG || [ ! -f "$OUT_DIR/build.ninja" ]; then
   mkdir -p "$OUT_DIR"
   cd "$OUT_DIR"
   CMAKE_BUILD_TYPE=Debug

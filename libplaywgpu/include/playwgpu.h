@@ -9,12 +9,17 @@
 #include <playsys.h>
 #include <webgpu.h>
 
+// PWGPU_CTX_SIZE is size in bytes needed for pwgpu_ctx_create
+#ifdef __wasm__
+  #define PWGPU_CTX_SIZE 8
+#else
+  #define PWGPU_CTX_SIZE 80
+#endif
+
 typedef struct pwgpu_ctx pwgpu_ctx_t;
 
-#define PWGPU_CTX_SIZE 80 // size in bytes needed for pwgpu_ctx_create
+PSYS_EXTERN pwgpu_ctx_t* pwgpu_ctx_create(void* mem);
+PSYS_EXTERN void pwgpu_ctx_dispose(pwgpu_ctx_t*);
 
-SYS_EXTERN pwgpu_ctx_t* pwgpu_ctx_create(void* mem);
-SYS_EXTERN void pwgpu_ctx_dispose(pwgpu_ctx_t*);
-
-SYS_EXTERN WGPUDevice pwgpu_ctx_set_device(pwgpu_ctx_t*, sys_fd gpudev_fd);
-SYS_EXTERN WGPUSurface pwgpu_ctx_set_surface(pwgpu_ctx_t*, sys_fd surf_fd);
+PSYS_EXTERN WGPUDevice pwgpu_ctx_set_device(pwgpu_ctx_t*, fd_t gpudev_fd);
+PSYS_EXTERN WGPUSurface pwgpu_ctx_set_surface(pwgpu_ctx_t*, fd_t surf_fd);

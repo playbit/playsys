@@ -6,6 +6,9 @@ playwgpu     = ../../libplaywgpu
 playwgpu_out = $playwgpu/out/debug
 dawn_out     = $playwgpu/out/debug/deps/dawn
 
+# --------------------------------------------------------------
+# flags
+
 cflags = $
   -std=c11 $
   -g $
@@ -18,7 +21,9 @@ cflags = $
   -Wno-unused-parameter $
   -Werror=implicit-function-declaration $
   -Wcovered-switch-default $
-  -Wunused
+  -Wunused $
+  -I$playsys/include $
+  -I$playwgpu/include
 
 ldflags =
 
@@ -30,9 +35,7 @@ cflags_wasm = $
 
 cflags_host = $
   -O3 $
-  -march=native $
-  -I$playsys/include $
-  -I$playwgpu/include
+  -march=native
 
 ldflags_macos = $
   -platform_version macos 10.15 10.15 $
@@ -45,22 +48,27 @@ ldflags_macos = $
   -framework IOSurface $
   -framework QuartzCore
 
+ldflags_wasm = $
+  -allow-undefined-file $playsys/etc/wasm.syms $
+  --no-entry $
+  --no-gc-sections $
+  --export-dynamic $
+  --import-memory
+
 # --------------------------------------------------------------
+# rules
 
-rule c2ll
-  command = clang -MMD -MF $out.d $cflags -emit-llvm -c -S -o $out $in
+rule c2obj_host
+  command = clang -MMD -MF $out.d $cflags $cflags_host -c -o $out $in
   depfile = $out.d
 
-rule c2obj
-  command = clang -MMD -MF $out.d $cflags -c -o $out $in
+rule c2obj_wasm
+  command = clang -MMD -MF $out.d $cflags $cflags_wasm -c -o $out $in
   depfile = $out.d
 
-rule c2bc
-  command = clang -MMD -MF $out.d $cflags -emit-llvm -c -o $out $in
+rule c2bc_wasm
+  command = clang -MMD -MF $out.d $cflags $cflags_wasm -emit-llvm -c -o $out $in
   depfile = $out.d
-
-rule ll2bc
-  command = llvm-as $in -o $out
 
 rule wasm_compile_and_link
   command = clang $cflags $cflags_wasm $
@@ -69,12 +77,14 @@ rule wasm_compile_and_link
     -Wl,--no-gc-sections $
     -Wl,--export-dynamic $
     -Wl,--import-memory $
-    -Wl,-allow-undefined-file sys_wasm.syms $
+    -Wl,-allow-undefined-file $playsys/etc/wasm.syms $
     -o $out $in
 
-rule macos_x64_ld
-  # ld aliases: ld.lld (Unix), ld64.lld (macOS), lld-link (Windows), wasm-ld (WebAssembly)
-  command = ld64.lld $ldflags -arch x86_64 $ldflags_macos $in -o $out
+rule ld_macos_x64
+  command = ld64.lld $ldflags $ldflags_macos -arch x86_64 $in -o $out
+
+rule ld_wasm
+  command = wasm-ld $ldflags $ldflags_wasm -error-limit=0 $in -o $out
 
 rule wasm2wast
   command = wasm2wat $in -o $out
@@ -83,28 +93,56 @@ rule wasm_asyncify
   command = wasm-opt --asyncify -O $in -o $out
 
 # --------------------------------------------------------------
+# targets
 
-build $builddir/example_mac_x64_d: macos_x64_ld $
-  $builddir/mac_x64/example.obj $
-  $builddir/mac_x64/hello_triangle.obj $
-  $builddir/mac_x64/syslib.obj $
-  $builddir/mac_x64/sys_posix.obj
+build $builddir/hello_mac_x64_d: ld_macos_x64 $
+  $builddir/mac_x64/hello.o $
+  $builddir/mac_x64/hello_triangle.o $
+  $builddir/mac_x64/syslib.o $
+  $builddir/mac_x64/sys_posix.o
   ldflags = $ldflags -L$playwgpu_out -rpath $playwgpu_out -lplaywgpu_d -lc++
 
-build $builddir/example_mac_x64: macos_x64_ld $
-  $builddir/mac_x64/example.obj $
-  $builddir/mac_x64/hello_triangle.obj $
-  $builddir/mac_x64/syslib.obj $
-  $builddir/mac_x64/sys_posix.obj $
+build $builddir/hello_mac_x64: ld_macos_x64 $
+  $builddir/mac_x64/hello.o $
+  $builddir/mac_x64/hello_triangle.o $
+  $builddir/mac_x64/syslib.o $
+  $builddir/mac_x64/sys_posix.o $
   $playwgpu_out/libplaywgpu_all.a
 
-build $builddir/mac_x64/example.obj: c2obj example.c
-  cflags = $cflags $cflags_host
-build $builddir/mac_x64/hello_triangle.obj: c2obj hello_triangle.c
-  cflags = $cflags $cflags_host
-build $builddir/mac_x64/syslib.obj: c2obj syslib.c
-  cflags = $cflags $cflags_host
-build $builddir/mac_x64/sys_posix.obj: c2obj $playsys/src/sys_posix.c
-  cflags = $cflags $cflags_host
+# build $builddir/hello.wasm: wasm_asyncify $builddir/hello1.wasm
+build $builddir/hello.wasm: wasm_asyncify $builddir/hello2.wasm
 
-default $builddir/example_mac_x64
+# build $builddir/hello1.wasm: wasm_compile_and_link $
+#   $builddir/wasm32/hello.bc $
+#   $builddir/wasm32/hello_triangle.bc $
+#   $builddir/wasm32/syslib.bc $
+#   $builddir/wasm32/sys_wasm.bc $
+#   $builddir/wasm32/pwgpu_ctx_wasm.bc
+
+build $builddir/hello2.wasm: ld_wasm $
+  $builddir/wasm32/hello.o $
+  $builddir/wasm32/hello_triangle.o $
+  $builddir/wasm32/syslib.o $
+  $builddir/wasm32/sys_wasm.o $
+  $builddir/wasm32/pwgpu_ctx_wasm.o
+
+build $builddir/mac_x64/hello.o:          c2obj_host hello.c
+build $builddir/mac_x64/hello_triangle.o: c2obj_host hello_triangle.c
+build $builddir/mac_x64/syslib.o:         c2obj_host syslib.c
+build $builddir/mac_x64/sys_posix.o:      c2obj_host $playsys/src/sys_posix.c
+
+build $builddir/wasm32/hello.o:          c2obj_wasm hello.c
+build $builddir/wasm32/hello_triangle.o: c2obj_wasm hello_triangle.c
+build $builddir/wasm32/syslib.o:         c2obj_wasm syslib.c
+build $builddir/wasm32/sys_wasm.o:       c2obj_wasm $playsys/src/sys_wasm.c
+build $builddir/wasm32/pwgpu_ctx_wasm.o: c2obj_wasm $playwgpu/src/ctx_wasm.c
+
+# build $builddir/wasm32/hello.bc:          c2bc_wasm hello.c
+# build $builddir/wasm32/hello_triangle.bc: c2bc_wasm hello_triangle.c
+# build $builddir/wasm32/syslib.bc:         c2bc_wasm syslib.c
+# build $builddir/wasm32/sys_wasm.bc:       c2bc_wasm $playsys/src/sys_wasm.c
+# build $builddir/wasm32/pwgpu_ctx_wasm.bc: c2bc_wasm $playwgpu/src/ctx_wasm.c
+
+# --------------------------------------------------------------
+
+default $builddir/hello_mac_x64 $builddir/hello.wasm
