@@ -3,9 +3,9 @@
 // you may not use this file except in compliance with the License.
 // See http://www.apache.org/licenses/LICENSE-2.0
 
-/* Note: when improving on this program it can be useful to run it as you edit:
-   autorun tools/specgen/*.* spec.md libplaysys/include/*.in -- \
-     "tools/build.sh && lldb -o run tools/specgen/specgen" */
+// Note: when improving on this program it can be useful to run it as you edit:
+// autorun tools/specgen/*.* spec.md include/*.in -- \
+//   "tools/build.sh && lldb -o run tools/specgen/specgen" */
 
 #include "../common.h"
 #include "putil.h"
@@ -315,8 +315,8 @@ static bool gen_c(FILE* outf, doc_t* spec, const char* tplfile, void** mnext) {
   str_appendcstr(ALLOCVAR("NS"), NS);
   str_appendcstr(ALLOCVAR("NS2"), NS2);
   str_appendcstr(ALLOCVAR("cstr"), "const char*");
-  str_appendcstr(ALLOCVAR("ptr"), "void*");
-  str_appendcstr(ALLOCVAR("mutptr"), "const void*");
+  str_appendcstr(ALLOCVAR("ptr"), "const void*");
+  str_appendcstr(ALLOCVAR("mutptr"), "void*");
 
   s = ALLOCVAR("TYPES");
   t = get_table(spec, "types");
@@ -502,8 +502,8 @@ int main(int argc, const char** argv) {
 
   // files
   const char* spec_infile = "spec.md";
-  const char* c_infile = "libplaysys/include/playsys.h.in";
-  const char* c_outfile = "libplaysys/include/playsys.h";
+  const char* c_infile = "include/playsys.h.in";
+  const char* c_outfile = "include/playsys.h";
 
   // parse markdown document
   if (!quiet) printf("parse %s\n", spec_infile);
