@@ -18,27 +18,33 @@ Specification: [spec.md](spec.md)
 
 ## Source
 
-- [`libplaysys`](libplaysys/) contains a C implementation of playsys
-
-- [`libplaywgpu`](libplaywgpu/) contains a WebGPU backend based on
-  [Dawn](https://dawn.googlesource.com/dawn)
-
+- [`include/playsys.h`](include/playsys.h) C API
 - [`examples/hello`](examples/hello/) contains an example program
+- [`backends`](backends/) implementations of the playsys API for host platforms
+  - [`posix`](backends/posix/)
+    C implementation of playsys functions on POSIX host's libc
+  - [`wgpu`](backends/wgpu/) WebGPU implementation for mac, win & linux based on
+    [Dawn](https://dawn.googlesource.com/dawn)
+  - [`js`](backends/js/) JavaScript implementation for web browsers
 
 
 ### Building
 
-Building the example on macOS (>=10.15, x86_64) with WebGPU:
+Building the "hello" example on macOS (>=10.15, x86_64) with WebGPU:
 
 ```sh
 cd path/to/playsys
-libplaywgpu/setup.sh
-libplaywgpu/build.sh
+backends/wgpu/setup.sh
+backends/wgpu/build.sh
 examples/hello/build.sh -run out/hello_mac_x64
 ```
 
 > Note: If you're having issues with clang/llvm, install a non-Apple version
 > from for example homebrew: `brew install llvm`.
+
+Building the "hello" example for web browsers:
+
+_TODO_
 
 
 ## Concept

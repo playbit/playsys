@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-LLVM_PATH=$("$(dirname "$0")"/find-llvm.sh)
+LLVM_PATH=$("$(dirname "$0")"/../../etc/find-llvm.sh)
 OUTPUT_LIBNAME=libplaywgpu_all
 
 if ! [ -d "$1" ]; then

@@ -31,7 +31,7 @@ dep_git_end() {
   popd >/dev/null
 }
 
-LLVM_PATH=$(./find-llvm.sh)
+LLVM_PATH=$(../../etc/find-llvm.sh)
 export PATH=$LLVM_PATH/bin:$PATH
 export CC=$LLVM_PATH/bin/clang
 export CXX=$LLVM_PATH/bin/clang++
