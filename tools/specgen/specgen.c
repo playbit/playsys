@@ -3,6 +3,10 @@
 // you may not use this file except in compliance with the License.
 // See http://www.apache.org/licenses/LICENSE-2.0
 
+/* Note: when improving on this program it can be useful to run it as you edit:
+   autorun tools/specgen/*.* spec.md libplaysys/include/*.in -- \
+     "tools/build.sh && lldb -o run tools/specgen/specgen" */
+
 #include "../common.h"
 #include "putil.h"
 #include "md4c.h"
@@ -20,16 +24,6 @@ static char tmpmem[4096*32];
 static const void* mend = tmpmem + sizeof(tmpmem);
 static bool quiet = false; // -quiet CLI flag
 static const char* progname; // argv[0]
-
-
-// static void report_err(const char* msg, void* userdata) {
-//   fprintf(stderr, "%s: %s\n", (const char*)userdata, msg);
-// }
-
-// static bool pstreq(const char* wantcstr, const char* got, int gotlen) {
-//   int wantlen = strlen(wantcstr);
-//   return wantlen == gotlen && memcmp(wantcstr, got, wantlen) == 0;
-// }
 
 
 typedef struct _doc {
