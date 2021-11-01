@@ -39,7 +39,7 @@ fi
 
 [ -n "$OUT_DIR" ] || OUT_DIR=out/$BUILD_MODE
 
-LLVM_PATH=$(./find-llvm.sh)
+LLVM_PATH=$(../../find-llvm.sh)
 echo "Using LLVM at $LLVM_PATH"
 export PATH=$LLVM_PATH/bin:$PATH
 export CC=$LLVM_PATH/bin/clang

@@ -25,7 +25,7 @@ esac; done
 [ "$RUN" != "1" ] || RUN=$1
 echo "x $@"
 
-LLVM_PATH=$(../../libplaywgpu/find-llvm.sh)
+LLVM_PATH=$(../../etc/find-llvm.sh)
 echo "Using LLVM at $LLVM_PATH"
 export PATH=$LLVM_PATH/bin:$PATH
 
@@ -56,11 +56,11 @@ if [ "$CMD" = "watch" ]; then
     fswatch --one-event --extended --latency=0.2 \
             --exclude='.*' --include='\.(c|h|syms|ninja|a|dylib|so)$' \
             . \
-            ../../libplaywgpu/out/debug \
-            ../../libplaywgpu/include \
-            ../../libplaywgpu/src/*wasm* \
-            ../../libplaysys/include \
-            ../../libplaysys/src/*wasm*
+            ../../backends/wgpu/out/debug \
+            ../../backends/wgpu/include \
+            ../../backends/wgpu/src/*wasm* \
+            ../../include \
+            ../../backends/js/*.c
   done
 else
   ninja "$@"

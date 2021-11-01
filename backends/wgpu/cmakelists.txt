@@ -58,7 +58,7 @@ target_include_directories(playwgpu
     ${CMAKE_CURRENT_BINARY_DIR}/deps/dawn/gen/src/include/dawn # <webgpu.h>
     ${CMAKE_CURRENT_BINARY_DIR}/deps/dawn/gen/src/include
     ${CMAKE_CURRENT_SOURCE_DIR}/deps/dawn/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/../libplaysys/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_link_libraries(playwgpu

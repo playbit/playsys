@@ -25,6 +25,9 @@ rule cexe
 
 _EOF
 
+LLVM_PATH=$(../etc/find-llvm.sh)
+export PATH=$LLVM_PATH/bin:$PATH
+
 ALL=
 # COMMON_SRC=$(echo $(ls *.c))
 

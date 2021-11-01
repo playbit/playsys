@@ -94,8 +94,8 @@ enum _p_sysop {
 PSYS_EXTERN isize p_syscall(psysop_t,isize,isize,isize,isize,isize) PSYS_WARN_UNUSED;
 static isize p_syscall_openat(fd_t base, const char* path, oflag_t flags, usize mode);
 static isize p_syscall_close(fd_t fd);
-static isize p_syscall_read(fd_t fd, const void* data, usize nbyte);
-static isize p_syscall_write(fd_t fd, void* data, usize nbyte);
+static isize p_syscall_read(fd_t fd, void* data, usize nbyte);
+static isize p_syscall_write(fd_t fd, const void* data, usize nbyte);
 static isize p_syscall_removeat(fd_t base, const char* path, usize flags);
 static isize p_syscall_renameat(fd_t oldbase, const char* oldpath, fd_t newbase,
   const char* newpath);
@@ -123,10 +123,10 @@ inline static isize p_syscall_openat(fd_t base, const char* path, oflag_t flags,
 inline static isize p_syscall_close(fd_t fd) {
   return _p_syscall1(p_sysop_close, (isize)fd);
 }
-inline static isize p_syscall_read(fd_t fd, const void* data, usize nbyte) {
+inline static isize p_syscall_read(fd_t fd, void* data, usize nbyte) {
   return _p_syscall3(p_sysop_read, (isize)fd, (isize)data, (isize)nbyte);
 }
-inline static isize p_syscall_write(fd_t fd, void* data, usize nbyte) {
+inline static isize p_syscall_write(fd_t fd, const void* data, usize nbyte) {
   return _p_syscall3(p_sysop_write, (isize)fd, (isize)data, (isize)nbyte);
 }
 inline static isize p_syscall_removeat(fd_t base, const char* path, usize flags) {

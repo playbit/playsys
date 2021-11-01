@@ -3,10 +3,7 @@
 // you may not use this file except in compliance with the License.
 // See http://www.apache.org/licenses/LICENSE-2.0
 
-// POSIX backend
-
-// macOS does not have a stable syscall ABI, instead its libc (libSystem) is
-// the stable kernel API interface.
+// POSIX backend using host platform libc
 
 #include <playsys.h>
 #include <sys_playwgpu.h> // backend interface
