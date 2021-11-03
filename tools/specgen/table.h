@@ -7,12 +7,17 @@
 #include "../common.h"
 #include "str.h"
 
-typedef struct _column {
-  str_t title;
-  int   width; // max row width
-  int   align; // -1 start, 0 center, 1 end
-} column_t;
+typedef enum {
+  table_align_start  = -1,
+  table_align_center = 0,
+  table_align_end    = 1,
+} table_align_t;
 
+typedef struct _column {
+  str_t         title;
+  int           width; // max row width
+  table_align_t align;
+} column_t;
 
 typedef struct _table {
   struct _table* next; // list link
@@ -23,12 +28,13 @@ typedef struct _table {
 } table_t;
 
 
-     table_t* table_new(const char* name, int nrows, int ncols);
-         void table_free(table_t* t);
+table_t* table_new(const char* name, int nrows, int ncols);
+void table_free(table_t* t);
 static str_t* table_cell(table_t* t, int row, int col);
-static    int table_colw(table_t* t, int col);
-static    int table_align(table_t* t, int col); // -1 start, 0 center, 1 end
-         void table_fprint(table_t* t, FILE* f);
+static int table_colw(table_t* t, int col);
+static table_align_t table_align(table_t* t, int col);
+static void table_set_align(table_t* t, int col, table_align_t);
+void table_fprint(table_t* t, FILE* f);
 
 
 // inline implementations
@@ -41,6 +47,10 @@ inline static int table_colw(table_t* t, int col) {
   return t->columns[col].width;
 }
 
-inline static int table_align(table_t* t, int col) { // -1 start, 0 center, 1 end
+inline static table_align_t table_align(table_t* t, int col) {
   return t->columns[col].align;
+}
+
+inline static void table_set_align(table_t* t, int col, table_align_t align) {
+  t->columns[col].align = align;
 }

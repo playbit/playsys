@@ -6,6 +6,16 @@
 #include "str.h"
 
 
+void str_dispose(str_t* s) {
+  if (s->p) {
+    free(s->p);
+    s->p = NULL;
+  }
+  s->len = 0;
+  s->cap = 0;
+}
+
+
 bool str_grow(str_t* s, int len) {
   s->cap = palign2(s->cap + len*2, sizeof(void*));
   void* ptr = realloc(s->p, s->cap);
@@ -67,4 +77,15 @@ bool str_fmt(str_t* s, const char* fmt, ...) {
   bool ok = str_fmtv(s, fmt, ap);
   va_end(ap);
   return ok;
+}
+
+
+void str_rtrim(str_t* s, const char* trimset) {
+  for (int i = s->len - 1; i >= 0; i--) {
+    if (strchr(trimset, s->p[i]) == NULL) {
+      s->len = i + 1;
+      return;
+    }
+  }
+  s->len = 0;
 }

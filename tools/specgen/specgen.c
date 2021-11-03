@@ -13,6 +13,7 @@
 #include "str.h"
 #include "template.h"
 #include "table.h"
+#include "elastictab.h"
 #include <err.h>
 
 #define PSYS_SYSCALL_MAXARGS 5
@@ -290,6 +291,113 @@ static int parse_args(char* input, char** argv, int argv_cap) {
 }
 
 
+static void str_append_tr(etab_t* etab, table_t* t, int row, const char* fmt, ...) {
+  int i = 0;
+  int fmtlen = strlen(fmt);
+  int chunk = 0; // start of current chunk
+  va_list ap;
+  va_start(ap, fmt);
+  char buf[32];
+  int etab_col = 0;
+
+  for (; i < fmtlen; i++) {
+    char c = fmt[i];
+    switch (c) {
+      case '\\': {
+        etab_write(etab, &fmt[chunk], i - chunk);
+        i++;
+        chunk = i;
+        break;
+      }
+      case '\t':
+        etab_col++;
+        break;
+      case '{': {
+        etab_write(etab, &fmt[chunk], i - chunk);
+        i++; // skip '{'
+        if (i+1 >= fmtlen)
+          errx(1, "malformed { in %s", __FUNCTION__);
+        char c = fmt[i++]; // save & then skip formatting char
+        if (fmt[i] == '>') {
+          etab->ralign[etab_col] = true;
+          i++;
+        }
+        if (fmt[i] != '}' || i+1 >= fmtlen)
+          errx(1, "malformed { in %s", __FUNCTION__);
+
+        switch (c) {
+          case 'r': { // row
+            int n = snprintf(buf, sizeof(buf), "%d", row);
+            etab_write(etab, buf, n);
+            break;
+          }
+          case 'R': // -row
+            if (row == 0) {
+              etab_write(etab, "0", 1);
+            } else {
+              int n = snprintf(buf, sizeof(buf), row ? "-%d" : "%d", row);
+              etab_write(etab, buf, n);
+            }
+            break;
+          case 's': { // str arg
+            const char* cstr = va_arg(ap, const char*);
+            etab_write(etab, cstr, strlen(cstr));
+            break;
+          }
+          case '0' ... '9': {
+            int col = c - '0';
+            if (col >= MIN(t->ncols, ETAB_MAX_COLS))
+              errx(1, "column %d out of bounds in %s", col, __FUNCTION__);
+            // etab->ralign[etab_col] = (table_align(t, col) == table_align_end);
+            str_t* val = table_cell(t, row, col);
+            etab_write(etab, val->p, val->len);
+            break;
+          }
+          default:
+            errx(1, "invalid format {%c} in %s", c, __FUNCTION__);
+        }
+        chunk = i + 1;
+        break;
+      }
+    }
+  }
+  etab_write(etab, &fmt[chunk], i - chunk);
+  va_end(ap);
+}
+
+
+typedef struct _fmt_table_entry {
+  const char* var;
+  const char* table;
+  const char* fmt;
+} fmt_table_entry_t;
+
+
+static int fmt_table_entries(
+  doc_t* spec, tplvar_t* vars, int varcap, fmt_table_entry_t* entryv, int entryc)
+{
+  assert(varcap >= entryc);
+  int varc = 0;
+  etab_t etab = {0}; // elastic tab writer
+
+  for (int i = 0; i < entryc; i++) {
+    vars[varc].name = entryv[i].var;
+    vars[varc].namelen = strlen(entryv[i].var);
+    str_t* s = &vars[varc++].value;
+    table_t* t = get_table(spec, entryv[i].table);
+    etab_init(&etab, s, 2, 8, 1, ' ', 0);
+    for (int row = 0; row < t->nrows; row++) {
+      str_append_tr(&etab, t, row, entryv[i].fmt);
+    }
+    etab_flush(&etab);
+    str_rtrim(s, "\n");
+  }
+
+  etab_dispose(&etab);
+  return varc;
+}
+
+
 // C language generator
 static bool gen_c(FILE* outf, doc_t* spec, const char* tplfile, void** mnext) {
   tplvar_t vars[128] = {0};
@@ -304,11 +412,12 @@ static bool gen_c(FILE* outf, doc_t* spec, const char* tplfile, void** mnext) {
   })
   #define VARS(STR_T_P) getvar(vars, varc, (STR_T_P)->p, (STR_T_P)->len)
   #define VAR(CSTR) getvar(vars, varc, (CSTR), strlen(CSTR))
+  #define TYPE_SUFFIX "_t"
+  #define NS "P_"
+  #define ns "p_"
+  #define sysop_prefix "sysop_"
 
   const int wrapcol = 90;
-  const char* type_prefix = "";
-  const char* ns = "p_";
-  const char* NS = "P_";
   const char* NS2 = "PSYS_";
 
   str_appendcstr(ALLOCVAR("ns"), ns);
@@ -318,90 +427,25 @@ static bool gen_c(FILE* outf, doc_t* spec, const char* tplfile, void** mnext) {
   str_appendcstr(ALLOCVAR("ptr"), "const void*");
   str_appendcstr(ALLOCVAR("mutptr"), "void*");
 
-  s = ALLOCVAR("TYPES");
+  // add types to set of vars
   t = get_table(spec, "types");
   if (t->ncols > 1) for (int row = 0; row < t->nrows; row++) {
     str_t* name = table_cell(t, row, 0);
-    str_t* type = table_cell(t, row, 1);
-    str_t* comment;
-    if (row)
-      str_appendc(s, '\n');
-    str_fmt(s, "typedef %-*s %s%s_t;", table_colw(t, 1), type->p, type_prefix, name->p);
-    if (t->ncols > 2 && (comment = table_cell(t, row, 2))) {
-      str_fmt(s, "%*s", MAX(0, table_colw(t, 0) - name->len), "");
-      str_fmt(s, " // %s", comment->p);
-    }
-    // add types to set of vars
-    str_t* typ = ALLOCVAR(name->p);
-    str_appendcstr(typ, type_prefix);
-    str_appendcstr(typ, name->p);
-    str_appendcstr(typ, "_t");
+    str_fmt(ALLOCVAR(name->p), "%s%s", name->p, TYPE_SUFFIX);
   }
 
-  s = ALLOCVAR("CONSTANTS");
-  t = get_table(spec, "constants");
-  if (t->ncols > 2) for (int row = 0; row < t->nrows; row++) {
-    str_t* name = table_cell(t, row, 0);
-    str_t* type = table_cell(t, row, 1);
-    str_t* value = table_cell(t, row, 2);
-    if (row)
-      str_appendc(s, '\n');
-    const char* typ = VARS(type);
-    str_fmt(s, "#define %s%-*s %*s((%s)(%s))",
-      NS, table_colw(t, 0), name->p,
-      MAX(0, table_colw(t, 1) - type->len), "", typ, value->p);
-    str_t* comment;
-    if (t->ncols > 2 && (comment = table_cell(t, row, 3)) && comment->len) {
-      str_fmt(s, "%*s", MAX(0, table_colw(t, 2) - value->len), "");
-      str_fmt(s, " // %s", comment->p);
-    }
-  }
-
-  s = ALLOCVAR("ERR_ENUM");
-  t = get_table(spec, "errors");
-  if (t->ncols > 0) for (int row = 0; row < t->nrows; row++) {
-    str_t* name = table_cell(t, row, 0);
-    if (row)
-      str_appendc(s, '\n');
-    str_fmt(s, "  %serr_%-*s = %3d,", ns, table_colw(t, 0), name->p, row ? -row : 0);
-    str_t* comment;
-    if (t->ncols > 1 && (comment = table_cell(t, row, 1)) && comment->len) {
-      str_fmt(s, " // %s", comment->p);
-    }
-  }
-
-  s = ALLOCVAR("OFLAG_ENUM");
-  t = get_table(spec, "open_flags");
-  if (t->ncols > 1) for (int row = 0; row < t->nrows; row++) {
-    str_t* name = table_cell(t, row, 0);
-    str_t* value = table_cell(t, row, 1);
-    if (row)
-      str_appendc(s, '\n');
-    str_fmt(s, "  %sopen_%-*s = %s,", ns, table_colw(t, 0), name->p, value->p);
-    str_t* comment;
-    if (t->ncols > 2 && (comment = table_cell(t, row, 2)) && comment->len) {
-      str_fmt(s, "%*s", MAX(0, table_colw(t, 1) - value->len), "");
-      str_fmt(s, " // %s", comment->p);
-    }
-  }
-
-  s = ALLOCVAR("SYSOP_ENUM");
-  t = get_table(spec, "sysops");
-  const char* sysop_prefix = "sysop_";
-  if (t->ncols > 1) for (int row = 0; row < t->nrows; row++) {
-    str_t* name = table_cell(t, row, 0);
-    str_t* value = table_cell(t, row, 1);
-    if (row)
-      str_appendc(s, '\n');
-    str_fmt(s, "  %s%s%-*s = %s,", ns, sysop_prefix, table_colw(t, 0), name->p, value->p);
-    str_t* args;
-    if (t->ncols > 2 && (args = table_cell(t, row, 2)) && args->len) {
-      str_fmt(s, "%*s", MAX(0, table_colw(t, 1) - value->len), "");
-      str_fmt(s, " // %s", args->p);
-    }
-  }
+  fmt_table_entry_t entries[] = {
+    {"TYPES",      "types",      "typedef {1}\t{0}" TYPE_SUFFIX ";\t// {2}\n"},
+    {"CONSTANTS",  "constants",  "#define " NS "{0}\t(({1}" TYPE_SUFFIX "){2})\t// {3}\n"},
+    {"ERR_ENUM",   "errors",     "  " ns "err_{0}\t=\t{R>},\t// {1}\n"},
+    {"OFLAG_ENUM", "open_flags", "  " ns "open_{0}\t=\t{1>},\t// {2}\n"},
+    {"SYSOP_ENUM", "sysops",     "  " ns sysop_prefix "{0}\t=\t{1>},\t// {2}\n"},
+  };
+  varc += fmt_table_entries(
+    spec, &vars[varc], countof(vars)-varc, entries, countof(entries));
 
   s = ALLOCVAR("SYSCALL_FN_PROTOTYPES");
+  t = get_table(spec, "sysops");
   int i = 0;
   const char* res_typ = "isize"; //VAR("res");
   char* argv[PSYS_SYSCALL_MAXARGS][2]; // [name, type], [name, type] ...
@@ -488,9 +532,29 @@ static bool gen_c(FILE* outf, doc_t* spec, const char* tplfile, void** mnext) {
 
   #undef ALLOCVAR
   #undef VAR
+  #undef TYPE_SUFFIX
+  #undef NS
+  #undef ns
+  #undef sysop_prefix
 
   // note: gen_template calls str_dispose on all vars' value
   return gen_template(outf, tplfile, vars, countof(vars), mnext);
+}
+
+
+// JS language generator
+static bool gen_js(FILE* outf, doc_t* spec, const char* tplfile, void** mnext) {
+  fmt_table_entry_t entries[] = {
+    {"TYPES",      "types",      "export type {0}_t\t=\t{1}\t// {2}\n"},
+    {"CONSTANTS",  "constants",  "export const {0}\t:{1}_t\t=\t{2>}\t// {3}\n"},
+    {"ERR_ENUM",   "errors",     "  {0}\t=\t{R>},\t// {1}\n"},
+    {"OFLAG_ENUM", "open_flags", "  {0}\t=\t{1>},\t// {2}\n"},
+    {"SYSOP_ENUM", "sysops",     "  {0}\t=\t{1>},\t// {2}\n"},
+  };
+  tplvar_t vars[countof(entries)] = {0};
+  int varc = fmt_table_entries(spec, vars, countof(vars), entries, countof(entries));
+  // note: gen_template calls str_dispose on all vars' value
+  return gen_template(outf, tplfile, vars, varc, mnext);
 }
 
 
@@ -504,6 +568,8 @@ int main(int argc, const char** argv) {
   const char* spec_infile = "spec.md";
   const char* c_infile = "include/playsys.h.in";
   const char* c_outfile = "include/playsys.h";
+  const char* js_infile = "backends/js/syscall.ts.in";
+  const char* js_outfile = "backends/js/syscall.ts";
 
   // parse markdown document
   if (!quiet) printf("parse %s\n", spec_infile);
@@ -522,13 +588,21 @@ int main(int argc, const char** argv) {
     fputc('\n', stdout);
   }
 
-  // generate
+  // generate C
   mnext = tmpmem; // reclaim memory
   FILE* outf = xfopen(c_outfile, "w");
   if (!gen_c(outf, &spec, c_infile, &mnext))
     return 1;
   fclose(outf);
   printf("%s: wrote %s\n", progname, c_outfile);
+
+  // generate JS
+  mnext = tmpmem; // reclaim memory
+  outf = xfopen(js_outfile, "w");
+  if (!gen_js(outf, &spec, js_infile, &mnext))
+    return 1;
+  fclose(outf);
+  printf("%s: wrote %s\n", progname, js_outfile);
 
   // doc_dispose(&spec);
   return 0;

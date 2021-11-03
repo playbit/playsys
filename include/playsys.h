@@ -43,10 +43,10 @@ typedef isize err_t;    // error code. Only negative values.
 typedef isize fd_t;     // file descriptor
 
 // constants
-#define P_FDSTDIN  ((fd_t)(0))    // input stream
-#define P_FDSTDOUT ((fd_t)(1))    // main output stream
-#define P_FDSTDERR ((fd_t)(2))    // logging output stream
-#define P_AT_FDCWD ((fd_t)(-100)) // "current directory" for *at file operations
+#define P_FDSTDIN  ((fd_t)0)    // input stream
+#define P_FDSTDOUT ((fd_t)1)    // main output stream
+#define P_FDSTDERR ((fd_t)2)    // logging output stream
+#define P_AT_FDCWD ((fd_t)-100) // "current directory" for *at file operations
 
 // errors (possible values of type err_t)
 enum _p_err {
@@ -56,7 +56,7 @@ enum _p_err {
   p_err_sys_op        =  -3, // invalid syscall op or syscall op data
   p_err_bad_name      =  -4, // invalid or misformed name
   p_err_not_found     =  -5, // resource not found
-  p_err_name_too_long =  -6,
+  p_err_name_too_long =  -6, // 
   p_err_canceled      =  -7, // operation canceled
   p_err_not_supported =  -8, // functionality not supported
   p_err_exists        =  -9, // already exists
@@ -66,27 +66,27 @@ enum _p_err {
 
 // open flags (possible bits of type oflag_t)
 enum _p_oflag {
-  p_open_ronly  = 0,  // Open for reading only
-  p_open_wonly  = 1,  // Open for writing only
-  p_open_rw     = 2,  // Open for both reading and writing
-  p_open_append = 4,  // Start writing at end (seekable files only)
-  p_open_create = 8,  // Create file if it does not exist
+  p_open_ronly  =  0, // Open for reading only
+  p_open_wonly  =  1, // Open for writing only
+  p_open_rw     =  2, // Open for both reading and writing
+  p_open_append =  4, // Start writing at end (seekable files only)
+  p_open_create =  8, // Create file if it does not exist
   p_open_trunc  = 16, // Set file size to zero
   p_open_excl   = 32, // fail if file exists when create and excl are set
 };
 
 // syscall operations (possible values of type psysop_t)
 enum _p_sysop {
-  p_sysop_openat   = 257,   // base fd, path cstr, flags oflag, mode usize
-  p_sysop_close    = 3,     // fd fd
-  p_sysop_read     = 0,     // fd fd, data mutptr, nbyte usize
-  p_sysop_write    = 1,     // fd fd, data ptr, nbyte usize
-  p_sysop_seek     = 8,     // TODO
-  p_sysop_statat   = 262,   // TODO (newfstatat in linux, alt: statx 332)
-  p_sysop_removeat = 263,   // base fd, path cstr, flags usize
-  p_sysop_renameat = 264,   // oldbase fd, oldpath cstr, newbase fd, newpath cstr
-  p_sysop_sleep    = 230,   // seconds usize, nanoseconds usize
-  p_sysop_exit     = 60,    // status_code i32
+  p_sysop_openat   =   257, // base fd, path cstr, flags oflag, mode usize
+  p_sysop_close    =     3, // fd fd
+  p_sysop_read     =     0, // fd fd, data mutptr, nbyte usize
+  p_sysop_write    =     1, // fd fd, data ptr, nbyte usize
+  p_sysop_seek     =     8, // TODO
+  p_sysop_statat   =   262, // TODO (newfstatat in linux, alt: statx 332)
+  p_sysop_removeat =   263, // base fd, path cstr, flags usize
+  p_sysop_renameat =   264, // oldbase fd, oldpath cstr, newbase fd, newpath cstr
+  p_sysop_sleep    =   230, // seconds usize, nanoseconds usize
+  p_sysop_exit     =    60, // status_code i32
   p_sysop_test     = 10000, // op psysop
 };
 

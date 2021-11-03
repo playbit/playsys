@@ -148,7 +148,11 @@ typedef unsigned long          uintptr_t;
 #endif
 
 #ifndef offsetof
-  #define offsetof(st, m) ((size_t)&(((st*)0)->m))
+  #if __has_builtin(__builtin_offsetof)
+    #define offsetof __builtin_offsetof
+  #else
+    #define offsetof(st, m) ((size_t)&(((st*)0)->m))
+  #endif
 #endif
 
 #ifndef alignof
