@@ -129,7 +129,7 @@ static int etab_terminate_cell(etab_t* e, bool htab) {
   }
   line->cells[cellidx] = e->cell;
   e->cell = (etab_cell_t){0};
-  return cellidx;
+  return cellidx + 1;
 }
 
 
