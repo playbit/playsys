@@ -1,5 +1,5 @@
 #include <playsys.h>
-#include <playwgpu.h>
+#include <playsys-gui.h>
 #include "hello.h"
 
 
@@ -11,6 +11,44 @@ void read_file(const char* path, void* buf, usize cap) {
   write(P_FDSTDOUT, buf, readlen);
   if (readlen > 0 && ((u8*)buf)[readlen - 1] != '\n')
     print("\n");
+}
+
+
+err_t read_gui_msg(fd_t gui_surf) {
+  p_gui_msghdr_t mh;
+  isize n = read(gui_surf, &mh, sizeof(mh));
+  if (n != sizeof(mh)) {
+    if (n > 0) {
+      print("short read\n");
+      return p_err_invalid;
+    }
+    return n;
+  }
+  switch (mh.type) {
+    case P_GUI_MSG_SURFINFO: {
+      p_gui_surfinfo_t surfinfo = {0};
+      if (read(gui_surf, &surfinfo, sizeof(surfinfo)) != sizeof(surfinfo)) {
+        print("p_gui_ivec2_t short read\n");
+        return p_err_invalid;
+      }
+      print("surface size: ", surfinfo.width, "x", surfinfo.height, "px @ ",
+            (u32)(surfinfo.dpscale*100), "%\n");
+      if (surfinfo.width <= 0) exit(4);
+      if (surfinfo.height <= 0) exit(5);
+      return 0;
+    }
+  }
+  print("p_gui_ivec2_t unexpected p_gui_msg_t ", mh.type, "\n");
+  return p_err_invalid;
+}
+
+
+err_t read_gui_msgs(fd_t gui_surf) {
+  while (1) {
+    isize n = read_gui_msg(gui_surf);
+    if (n < 1)
+      return n;
+  }
 }
 
 
@@ -31,52 +69,53 @@ PUB int main(int argc, const char** argv) {
   //     Has a fixed size specific to the actual backing texture of the surface.
   //
 
-  // #ifndef __wasm__
+  // // select a GPU device
+  // fd_t wgpu_dev = open("/sys/wgpu/dev/gpu0", p_open_ronly, 0);
+  // check_status(wgpu_dev, "open /sys/wgpu/dev/gpu0");
+  // print("opened wgpu device (handle ", wgpu_dev, ")\n");
+  // // TODO: consider open-request info with query string, e.g.
+  // //       "/gpu?required-feats=texture-compression-bc"
+  // // TODO: allow read device to access name, features, limits and isFallbackAdapter.
+  // // TODO: allow p_open_rw on device to enable simple compute
 
-  // select a GPU device
-  fd_t pwgpu_dev = open("/sys/wgpu/dev/gpu0", p_open_ronly, 0);
-  check_status(pwgpu_dev, "open /sys/wgpu/dev/gpu0");
-  print("opened wgpu device (handle ", pwgpu_dev, ")\n");
-  // TODO: allow p_open_rw on device to enable simple compute
+  // // select a GPU device (alt to fs, using a syscall instead)
+  // fd_t wgpu_dev = p_syscall_wgpu_opendev(0); print("wgpu_opendev:", wgpu_dev, "\n");
+  // check_status(wgpu_dev, "wgpu_opendev");
 
   // create a graphics surface
-  fd_t pwgpu_surf = open("/sys/wgpu/surface", p_open_rw, 0);
-  check_status(pwgpu_surf, "open /sys/wgpu/surface");
-  print("opened wgpu surface (handle ", pwgpu_surf, ")\n");
-  write_cstr(pwgpu_surf,
-    "width  400\n"
-    "height 300\n"
-    "title  Hello world\n");
+  fd_t gui_surf = p_syscall_gui_mksurf(400, 300, /*wgpu_dev*/-1, 0);
+  check_status(gui_surf, "gui_mksurf");
 
-  // create WebGPU API interface
-  u8 ctx_mem[PWGPU_CTX_SIZE];
-  pwgpu_ctx_t* ctx = pwgpu_ctx_create(ctx_mem);
-  WGPUDevice device = pwgpu_ctx_set_device(ctx, pwgpu_dev); check_notnull(device);
-  WGPUSurface surface = pwgpu_ctx_set_surface(ctx, pwgpu_surf); check_notnull(surface);
+  // TODO: consider a gui_ctl syscall for controlling gui/wgpu resources, like setting
+  // the title of a surface or assigning a different device to a surface.
+  // This is how linux deals with configuration, e.g. ioctl, shmctl, msgctl, etc.
+
+  // access WGPU resources for the graphics surface
+  WGPUDevice  device  = p_gui_wgpu_device(gui_surf);  check_notnull(device);
+  WGPUSurface surface = p_gui_wgpu_surface(gui_surf); check_notnull(surface);
 
   hello_triangle_set_device(device);
   hello_triangle_set_surface(surface);
 
   // runloop
-  for (int i = 0; i < 500; i++) {
-    // if (i == 200) // change size
-    //   write_cstr(pwgpu_surf, "width 700\n");
+  for (int i = 0; i < 20000; i++) {
+    // read events from surface
+    isize n = read_gui_msgs(gui_surf);
+    if (n < 0) {
+      if (n != p_err_end)
+        check_status(n, "read(gui_surf)");
+      break;
+    }
 
+    // render a frame
     hello_triangle_render();
-
-    isize n = read(pwgpu_surf, buf, sizeof(buf));
-    if (n < 1)
-      break; // surface closed
   }
 
   // print("sleeping for 200ms\n");
   // sys_sleep(0, 200000000); // 200ms
 
-  pwgpu_ctx_dispose(ctx);
-  check_status(close(pwgpu_surf), "close(pwgpu_surf)");
-  check_status(close(pwgpu_dev), "close(pwgpu_dev)");
-
-  // #endif // !defined(__wasm__)
+  check_status(close(gui_surf), "close(wgpu_surf)");
+  // check_status(close(wgpu_dev), "close(wgpu_dev)");
 
   return 0;
 }
@@ -93,17 +132,16 @@ void printerr(const char* str) {
 }
 
 void check_status(isize r, const char* contextmsg) {
-  if (r < 0) {
-    err_t err = (err_t)-r;
-    const char* errname = p_errname(err);
-    printerr("error: "); printerr(errname);
-    if (contextmsg && strlen(contextmsg)) {
-      printerr(" ("); printerr(contextmsg); printerr(")\n");
-    } else {
-      printerr("\n");
-    }
-    exit(1);
+  if (r >= 0)
+    return;
+  const char* errname = p_errname((err_t)r);
+  printerr("error: "); printerr(errname);
+  if (contextmsg && strlen(contextmsg)) {
+    printerr(" ("); printerr(contextmsg); printerr(")\n");
+  } else {
+    printerr("\n");
   }
+  exit(1);
 }
 
 void check_notnull1(const char* str) {

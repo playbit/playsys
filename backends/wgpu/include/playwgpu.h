@@ -3,23 +3,36 @@
 // you may not use this file except in compliance with the License.
 // See http://www.apache.org/licenses/LICENSE-2.0
 
-// TODO: consider moving this into playsys
+// for use by playsys implementations
 
 #pragma once
 #include <playsys.h>
+#include <playsys-gui.h>
 #include <webgpu.h>
 
-// PWGPU_CTX_SIZE is size in bytes needed for pwgpu_ctx_create
-#ifdef __wasm__
-  #define PWGPU_CTX_SIZE 8
-#else
-  #define PWGPU_CTX_SIZE 80
-#endif
+typedef struct p_wgpu_dev p_wgpu_dev_t; // WGPU device
+typedef struct p_gui_surf p_gui_surf_t; // GUI surface
 
-typedef struct pwgpu_ctx pwgpu_ctx_t;
+typedef enum p_wgpu_dev_flag {
+  p_wgpu_dev_fl_none     = 0,
+  p_wgpu_dev_fl_ronly    = 1,      // read-only (unused)
+  p_wgpu_dev_fl_powhigh  = 1 << 1, // request high-perf adapter
+  p_wgpu_dev_fl_powlow   = 1 << 2, // request low-energy adapter
+  p_wgpu_dev_fl_software = 1 << 3, // force software driver to be used
+} p_wgpu_dev_flag_t;
 
-PSYS_EXTERN pwgpu_ctx_t* pwgpu_ctx_create(void* mem);
-PSYS_EXTERN void pwgpu_ctx_dispose(pwgpu_ctx_t*);
+typedef struct _p_gui_surf_descr {
+  u32         width, height; // size in dp units. 0 = host's choice
+  fd_t        device; // <0 = host's choice
+  usize       flags;
+  const char* title; // optional title
+} p_gui_surf_descr_t;
 
-PSYS_EXTERN WGPUDevice pwgpu_ctx_set_device(pwgpu_ctx_t*, fd_t gpudev_fd);
-PSYS_EXTERN WGPUSurface pwgpu_ctx_set_surface(pwgpu_ctx_t*, fd_t surf_fd);
+// adapter_id<0 means "auto"
+PSYS_EXTERN err_t p_wgpu_opendev(
+  p_wgpu_dev_t**, fd_t, fd_t fd_user, int adapter, p_wgpu_dev_flag_t);
+PSYS_EXTERN err_t p_wgpu_dev_close(p_wgpu_dev_t*);
+
+PSYS_EXTERN err_t p_gui_surf_open(p_gui_surf_t**, fd_t, fd_t fd_user, p_gui_surf_descr_t*);
+PSYS_EXTERN isize p_gui_surf_read(p_gui_surf_t*, void* data, usize size);
+PSYS_EXTERN err_t p_gui_surf_close(p_gui_surf_t*);

@@ -59,8 +59,9 @@ if [ "$CMD" = "watch" ]; then
             ../../backends/wgpu/out/debug \
             ../../backends/wgpu/include \
             ../../backends/wgpu/src/*wasm* \
-            ../../include \
-            ../../backends/js/*.c
+            ../../backends/posix/*.c \
+            ../../backends/js/*.c \
+            ../../include
   done
 else
   ninja "$@"

@@ -11,6 +11,7 @@ add_subdirectory("deps/dawn" EXCLUDE_FROM_ALL)
 
 set(PWGPU_SOURCES
   src/wgpu.cc
+  src/ringbuf.c
   src/glfw.cc
   src/glfw_mac.mm  # TODO: only include for macOS and iOS
 )

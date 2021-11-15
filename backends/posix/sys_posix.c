@@ -6,7 +6,7 @@
 // POSIX backend using host platform libc
 
 #include <playsys.h>
-#include <sys_playwgpu.h> // backend interface
+#include <playwgpu.h> // backend interface
 
 #include <fcntl.h>  // open
 #include <unistd.h> // close, read, write
@@ -120,20 +120,18 @@ static isize open_uname(psysop_t op, const char* path, usize flags, isize mode) 
 
 typedef enum {
   VFILE_NULL,
-  VFILE_WGPU_DEV,  // pwgpu_dev_t
-  VFILE_WGPU_SURF, // pwgpu_surface_t
-  VFILE_WGPU_CTL,  // pwgpu_ctl_t
+  VFILE_WGPU_DEV,  // p_wgpu_dev_t
+  VFILE_GUI_SURF, // p_gui_surf_t
 } vfile_type_t;
 
 typedef struct vfile {
-  fd_t       fd_user; // user's end of pipe/channel
-  fd_t       fd_impl; // implementation's end of pipe/channel
+  fd_t         fd_user; // user's end of pipe/channel
+  fd_t         fd_impl; // implementation's end of pipe/channel
   vfile_type_t type;
   union {
-    void*           ptr;
-    pwgpu_dev_t*     dev;  // type VFILE_WGPU_DEV
-    pwgpu_surface_t* surf; // type VFILE_WGPU_SURF
-    pwgpu_ctl_t*     ctl;  // type VFILE_WGPU_CTL
+    void*         ptr;
+    p_wgpu_dev_t* dev;  // type VFILE_WGPU_DEV
+    p_gui_surf_t* surf; // type VFILE_GUI_SURF
   };
   isize(*on_close)(struct vfile*);
   isize(*on_read)(struct vfile*, void* data, usize size);
@@ -217,99 +215,81 @@ static isize vfile_close(vfile_t* f) {
 }
 
 
-static isize close_pwgpu_surf(vfile_t* f) {
-  pwgpu_surface_close(f->surf);
-  return 0;
+static isize close_wgpu_dev(vfile_t* f) {
+  return p_wgpu_dev_close(f->dev);
 }
 
-static isize read_pwgpu_surf(vfile_t* f, void* data, usize size) {
-  return pwgpu_surface_read(f->surf, data, size);
-}
-
-static isize open_pwgpu_surf(psysop_t op, const char* path, usize flags, isize mode) {
-  if ((flags & p_open_rw) == 0)
-    return p_err_invalid;
-
-  // swap rw mode flag for vfile_open so we get a pipe instead of socketpair since
-  // reads are handled by the virtual read implemenation read_pwgpu_surf.
-  flags = (flags & ~p_open_rw) | p_open_wonly;
-
-  vfile_t* f;
-  fd_t fd = vfile_open(VFILE_WGPU_SURF, flags, &f);
-  if (fd > -1) {
-    isize r = set_nonblock(f->fd_impl); // enable read()ing data of unknown length
-    // TODO: consider using writev & readv instead.
-    // TODO: consider fully virtual I/O: add buffer to pwgpu_surface_t and set f->on_read.
-    if (r != 0) {
-      vfile_close(f);
-      return r;
-    }
-    f->surf = pwgpu_surface_open(f->fd_impl, f->fd_user);
-    if (!f->surf) {
-      vfile_close(f);
-      return p_err_invalid;
-    }
-    f->on_close = close_pwgpu_surf;
-    f->on_read = read_pwgpu_surf;
-  }
-  return fd;
-}
-
-
-static isize close_pwgpu_ctl(vfile_t* f) {
-  return pwgpu_ctl_close(f->ctl);
-}
-
-static isize read_pwgpu_ctl(vfile_t* f, void* data, usize size) {
-  return pwgpu_ctl_read(f->ctl, data, size);
-}
-
-static isize write_pwgpu_ctl(vfile_t* f, const void* data, usize size) {
-  return pwgpu_ctl_write(f->ctl, data, size);
-}
-
-static isize open_pwgpu_ctl(psysop_t op, const char* path, usize flags, isize mode) {
-  if ((flags & p_open_rw) == 0)
-    return p_err_invalid;
-
-  vfile_t* f;
-  fd_t fd = vfile_open(VFILE_WGPU_CTL, 0, &f);
-  if (fd > -1) {
-    isize r = set_nonblock(f->fd_impl); // enable read()ing data of unknown length
-    if (r == 0)
-      r = pwgpu_ctl_open(&f->ctl, f->fd_impl);
-    if (r != 0) {
-      vfile_close(f);
-      return p_err_invalid;
-    }
-    f->on_close = close_pwgpu_ctl;
-    f->on_read = read_pwgpu_ctl;
-    f->on_write = write_pwgpu_ctl;
-  }
-  return fd;
-}
-
-
-static isize close_pwgpu_dev(vfile_t* f) {
-  pwgpu_dev_close(f->dev);
-  return 0;
-}
-
-static isize open_pwgpu_dev(psysop_t op, const char* path, usize flags, isize mode) {
+static isize open_wgpu_dev(psysop_t op, const char* path, usize flags, isize mode) {
   if (flags & p_open_wonly)
     return p_err_invalid;
   vfile_t* f;
   fd_t fd = vfile_open(VFILE_WGPU_DEV, flags, &f);
-  if (fd > -1) {
-    int adapter_id = -1; // TODO: parse "path"
-    pwgpu_dev_flag_t fl = (flags & p_open_ronly) ? pwgpu_dev_fl_ronly : 0;
-    f->dev = pwgpu_dev_open(f->fd_impl, f->fd_user, adapter_id, fl);
-    if (!f->dev) { // no suitable adapter found
-      vfile_close(f);
-      return p_err_not_supported;
-    }
-    f->on_close = close_pwgpu_dev;
+  if (fd < 0)
+    return fd;
+  int adapter_id = -1; // TODO: parse "path"
+  p_wgpu_dev_flag_t fl = (flags & p_open_ronly) ? p_wgpu_dev_fl_ronly : 0;
+  err_t e = p_wgpu_opendev(&f->dev, f->fd_impl, f->fd_user, adapter_id, fl);
+  if (e < 0) {
+    vfile_close(f);
+    return e;
   }
+  f->on_close = close_wgpu_dev;
+  return fd;
+}
+
+
+static isize sys_syscall_wgpu_opendev(psysop_t op, usize flags) {
+  vfile_t* f;
+  fd_t fd = vfile_open(VFILE_WGPU_DEV, flags, &f);
+  if (fd < 0)
+    return fd;
+  int adapter_id = -1; // TODO allow configuration via syscall arguments
+  p_wgpu_dev_flag_t fl = (p_wgpu_dev_flag_t)flags;
+  err_t e = p_wgpu_opendev(&f->dev, f->fd_impl, f->fd_user, adapter_id, fl);
+  if (e < 0) {
+    vfile_close(f);
+    return e;
+  }
+  f->on_close = close_wgpu_dev;
+  return fd;
+}
+
+
+static isize close_gui_surf(vfile_t* f) {
+  return p_gui_surf_close(f->surf);
+}
+
+static isize read_gui_surf(vfile_t* f, void* data, usize size) {
+  return p_gui_surf_read(f->surf, data, size);
+}
+
+static isize sys_syscall_gui_mksurf(
+  psysop_t op, u32 width, u32 height, fd_t device, usize flags)
+{
+  vfile_t* f;
+  fd_t fd = vfile_open(VFILE_GUI_SURF, p_open_wonly, &f);
+  if (fd < 0)
+    return fd;
+  isize r = set_nonblock(f->fd_impl); // enable read()ing data of unknown length
+  // TODO: consider using writev & readv instead.
+  // TODO: consider fully virtual I/O: add buffer to p_gui_surf_t and set f->on_read.
+  if (r != 0) {
+    vfile_close(f);
+    return r;
+  }
+  p_gui_surf_descr_t d = {
+    .width = width,
+    .height = height,
+    .flags = flags,
+    .device = device,
+  };
+  r = p_gui_surf_open(&f->surf, f->fd_impl, f->fd_user, &d);
+  if (r < 0) {
+    vfile_close(f);
+    return r;
+  }
+  f->on_close = close_gui_surf;
+  f->on_read = read_gui_surf;
   return fd;
 }
 
@@ -328,9 +308,7 @@ static isize open_special(psysop_t op, const char* path, usize flags, isize mode
       MUSTTAIL return (fun)(op, path, flags, mode)
 
   ROUTE("uname", open_uname);
-  ROUTE_PREFIX("wgpu/dev/gpu", open_pwgpu_dev);
-  ROUTE("wgpu/surface", open_pwgpu_surf);
-  ROUTE("wgpu/ctl", open_pwgpu_ctl);
+  ROUTE_PREFIX("wgpu/dev/gpu", open_wgpu_dev);
 
   #undef ROUTE
   return p_err_not_found;
@@ -445,6 +423,9 @@ isize p_syscall(
     case p_sysop_statat:   FORWARD(sys_syscall_NOT_IMPLEMENTED);
     case p_sysop_removeat: FORWARD(sys_syscall_NOT_IMPLEMENTED);
     case p_sysop_renameat: FORWARD(sys_syscall_NOT_IMPLEMENTED);
+
+    case p_sysop_wgpu_opendev: FORWARD(sys_syscall_wgpu_opendev);
+    case p_sysop_gui_mksurf:   FORWARD(sys_syscall_gui_mksurf);
   }
   return p_err_sys_op;
 }

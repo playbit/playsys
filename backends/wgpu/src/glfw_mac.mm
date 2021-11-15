@@ -10,7 +10,7 @@
 #define GLFW_EXPOSE_NATIVE_COCOA
 #include <GLFW/glfw3native.h>
 
-std::unique_ptr<wgpu::ChainedStruct> _pwgpu_surface_descriptor(pwgpu_surface_t* surf) {
+std::unique_ptr<wgpu::ChainedStruct> p_gui_surf_wgpu_descriptor(p_gui_surf_t* surf) {
   NSWindow* nswin = glfwGetCocoaWindow(surf->window);
   NSView* view = [nswin contentView];
 
