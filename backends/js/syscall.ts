@@ -30,17 +30,18 @@ export const AT_FDCWD :fd_t = -100 // "current directory" for *at file operation
 // errors
 export enum err {
   none          =   0, // no error
-  badfd         =  -1, // invalid file descriptor
-  invalid       =  -2, // invalid data or argument
-  sys_op        =  -3, // invalid syscall op or syscall op data
+  invalid       =  -1, // invalid data or argument
+  sys_op        =  -2, // invalid syscall op or syscall op data
+  badfd         =  -3, // invalid file descriptor
   bad_name      =  -4, // invalid or misformed name
   not_found     =  -5, // resource not found
   name_too_long =  -6, // 
   canceled      =  -7, // operation canceled
-  not_supported =  -8, // functionality not supported
+  not_supported =  -8, // not supported
   exists        =  -9, // already exists
   end           = -10, // end of resource
   access        = -11, // permission denied
+  nomem         = -12, // cannot allocate memory
 }
 
 // open flags
@@ -56,17 +57,19 @@ export enum oflag {
 
 // syscall operations
 export enum sysop {
-  openat   =   257, // base fd, path cstr, flags oflag, mode usize
-  close    =     3, // fd fd
-  read     =     0, // fd fd, data mutptr, nbyte usize
-  write    =     1, // fd fd, data ptr, nbyte usize
-  seek     =     8, // TODO
-  statat   =   262, // TODO (newfstatat in linux, alt: statx 332)
-  removeat =   263, // base fd, path cstr, flags usize
-  renameat =   264, // oldbase fd, oldpath cstr, newbase fd, newpath cstr
-  sleep    =   230, // seconds usize, nanoseconds usize
-  exit     =    60, // status_code i32
-  test     = 10000, // op psysop
+  openat       =   257, // base fd, path cstr, flags oflag, mode usize
+  close        =     3, // fd fd
+  read         =     0, // fd fd, data mutptr, nbyte usize
+  write        =     1, // fd fd, data ptr, nbyte usize
+  seek         =     8, // TODO
+  statat       =   262, // TODO (newfstatat in linux, alt: statx 332)
+  removeat     =   263, // base fd, path cstr, flags usize
+  renameat     =   264, // oldbase fd, oldpath cstr, newbase fd, newpath cstr
+  sleep        =   230, // seconds usize, nanoseconds usize
+  exit         =    60, // status_code i32
+  test         = 10000, // op psysop
+  wgpu_opendev = 10001, // flags usize
+  gui_mksurf   = 10002, // width u32, height u32, device fd, flags usize
 }
 
 // Note: this file is generated from spec.md; edit with caution

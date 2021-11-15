@@ -55,17 +55,18 @@ Errors are of type `err` and are negative values, with the exception of `none`.
 name           | meaning
 ---------------|--------------------------------------------------------------
 none           | no error
-badfd          | invalid file descriptor
 invalid        | invalid data or argument
 sys_op         | invalid syscall op or syscall op data
+badfd          | invalid file descriptor
 bad_name       | invalid or misformed name
 not_found      | resource not found
 name_too_long  |
 canceled       | operation canceled
-not_supported  | functionality not supported
+not_supported  | not supported
 exists         | already exists
 end            | end of resource
 access         | permission denied
+nomem          | cannot allocate memory
 
 
 ## Syscall
@@ -99,55 +100,32 @@ wasm         | WASM (args on stack)
 
 [](# ":sysops")
 
-name                    | psysop | arguments
-------------------------|-------:|--------------------------------------------
-[openat](#openat)       |    257 | base fd, path cstr, flags oflag, mode usize
-[close](#close)         |      3 | fd fd
-[read](#read)           |      0 | fd fd, data mutptr, nbyte usize
-[write](#write)         |      1 | fd fd, data ptr, nbyte usize
-[seek](#seek)           |      8 | _TODO_
-[statat](#statat)       |    262 | _TODO_ (newfstatat in linux, alt: statx 332)
-[removeat](#removeat)   |    263 | base fd, path cstr, flags usize
-[renameat](#renameat)   |    264 | oldbase fd, oldpath cstr, newbase fd, newpath cstr
-[sleep](#sleep)         |    230 | seconds usize, nanoseconds usize
-[exit](#exit)           |     60 | status_code i32
-[test](#test)           |  10000 | op psysop
+name                          | psysop | arguments
+------------------------------|-------:|--------------------------------------------
+[openat](#openat)             |    257 | base fd, path cstr, flags oflag, mode usize
+[close](#close)               |      3 | fd fd
+[read](#read)                 |      0 | fd fd, data mutptr, nbyte usize
+[write](#write)               |      1 | fd fd, data ptr, nbyte usize
+[seek](#seek)                 |      8 | _TODO_
+[statat](#statat)             |    262 | _TODO_ (newfstatat in linux, alt: statx 332)
+[removeat](#removeat)         |    263 | base fd, path cstr, flags usize
+[renameat](#renameat)         |    264 | oldbase fd, oldpath cstr, newbase fd, newpath cstr
+[sleep](#sleep)               |    230 | seconds usize, nanoseconds usize
+[exit](#exit)                 |     60 | status_code i32
+[test](#test)                 |  10000 | op psysop
+[wgpu_opendev](#wgpu_opendev) |  10001 | flags usize
+[gui_mksurf](#gui_mksurf)     |  10002 | width u32, height u32, device fd, flags usize
 
-##### Syscall operations under consideration
 
-name              | psysop | comments
-------------------|-------:|-------------------------------------
-mkdirat           |    258 | can we use openat with a flag instead?
-ioring_setup      |    425 | count u32, \*io_uring_params_t
-ioring_enter      |    426 | ring fd, to_submit u32, min_complete u32, flags u32
-ioring_register   |    427 | ring fd, opcode u32, arg ptr, nr_args u32
-readv             |     19 | Needed for ioring
-writev            |     20 | Needed for ioring
-memmap            |      9 | Needed for ioring
-memunmap          |     11 | Needed for ioring
-ioctl             |     16 | Needed to set nonblock flags on FDs
-symlinkat         |    265 | create symbolic file link
-readlinkat        |    267 | query symbolic file link
-chmodat           |    268 | change file mode
-chownat           |    260 | change [file ownership](#file-ownership)
-mount             |    165 | mount a filesystem
-unmount           |    166 | unmount a filesystem
+#### gui_mksurf
 
-##### Syscall operations notes
+Creates a graphics surface
 
-- `psysop` values match the corresponding Linux syscall numbers to make implementation
-  for Linux simpler. `psysop >= 10000` are used for playsys-specific operations.
-
-- `ioring_*` is a proposal to implement async I/O like Linux's
-  [io_uring](https://kernel.dk/io_uring.pdf) interface. Programs running on
-  Linux could be directly interfacing with io_uring for ideal performance
-  while async-only platforms like Web would benefit from an async API to avoid
-  rewriting WASM code with e.g. `wasm-opt --asyncify`.
-  See [linux:tools/io_uring/syscall.c](https://github.com/torvalds/linux/blob/v5.14/tools/io_uring/syscall.c) for the Linux implementation.
-
-- `sleep` may be better modeled like Linux's `clock_nanosleep`, specifically
-  in regards to a "remainder" return value.
-  See `musl/src/time/clock_nanosleep.c`
+    gui_mksurf → fd | err
+      width  u32   Width in dp units. 0 to let the host decide.
+      height u32   Height in dp units. 0 to let the host decide.
+      device fd    GPU device. -1 to let the host decide.
+      flags  usize
 
 
 #### test
@@ -203,6 +181,43 @@ excl   |    32 | fail if file exists when `create` and `excl` are set
 
 _[TODO]_
 See [\<sys/stat.h>](https://pubs.opengroup.org/onlinepubs/007904875/basedefs/sys/stat.h.html)
+
+
+##### Syscall operations under consideration
+
+name              | psysop | comments
+------------------|-------:|-------------------------------------
+mkdirat           |    258 | can we use openat with a flag instead?
+ioring_setup      |    425 | count u32, \*io_uring_params_t
+ioring_enter      |    426 | ring fd, to_submit u32, min_complete u32, flags u32
+ioring_register   |    427 | ring fd, opcode u32, arg ptr, nr_args u32
+readv             |     19 | Needed for ioring
+writev            |     20 | Needed for ioring
+memmap            |      9 | Needed for ioring
+memunmap          |     11 | Needed for ioring
+ioctl             |     16 | Needed to set nonblock flags on FDs
+symlinkat         |    265 | create symbolic file link
+readlinkat        |    267 | query symbolic file link
+chmodat           |    268 | change file mode
+chownat           |    260 | change [file ownership](#file-ownership)
+mount             |    165 | mount a filesystem
+unmount           |    166 | unmount a filesystem
+
+##### Syscall operations notes
+
+- `psysop` values match the corresponding Linux syscall numbers to make implementation
+  for Linux simpler. `psysop >= 10000` are used for playsys-specific operations.
+
+- `ioring_*` is a proposal to implement async I/O like Linux's
+  [io_uring](https://kernel.dk/io_uring.pdf) interface. Programs running on
+  Linux could be directly interfacing with io_uring for ideal performance
+  while async-only platforms like Web would benefit from an async API to avoid
+  rewriting WASM code with e.g. `wasm-opt --asyncify`.
+  See [linux:tools/io_uring/syscall.c](https://github.com/torvalds/linux/blob/v5.14/tools/io_uring/syscall.c) for the Linux implementation.
+
+- `sleep` may be better modeled like Linux's `clock_nanosleep`, specifically
+  in regards to a "remainder" return value.
+  See `musl/src/time/clock_nanosleep.c`
 
 
 

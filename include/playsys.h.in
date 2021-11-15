@@ -76,4 +76,12 @@ $SYSCALL_FN_PROTOTYPES
 
 $SYSCALL_FN_IMPLS
 
+// p_err_str returns the symbolic name of an error as a string
+inline static const char* ${ns}err_str(err_t e) {
+  switch ((enum _${ns}err)e) {
+$ERR_SWITCH
+  }
+  return "?";
+}
+
 // Note: this file is generated from spec.md; edit with caution

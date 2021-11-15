@@ -438,6 +438,7 @@ static bool gen_c(FILE* outf, doc_t* spec, const char* tplfile, void** mnext) {
     {"TYPES",      "types",      "typedef {1}\t{0}" TYPE_SUFFIX ";\t// {2}\n"},
     {"CONSTANTS",  "constants",  "#define " NS "{0}\t(({1}" TYPE_SUFFIX "){2})\t// {3}\n"},
     {"ERR_ENUM",   "errors",     "  " ns "err_{0}\t=\t{R>},\t// {1}\n"},
+    {"ERR_SWITCH", "errors",     "  case " ns "err_{0}:\treturn \"{0}\";\n"},
     {"OFLAG_ENUM", "open_flags", "  " ns "open_{0}\t=\t{1>},\t// {2}\n"},
     {"SYSOP_ENUM", "sysops",     "  " ns sysop_prefix "{0}\t=\t{1>},\t// {2}\n"},
   };
