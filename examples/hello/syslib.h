@@ -2,8 +2,8 @@
 #include <playsys.h>
 
 _Noreturn void sys_exit(int status);
-fd_t sys_open(const char* path, oflag_t flags, usize mode) PSYS_WARN_UNUSED;
-fd_t sys_openat(fd_t, const char* path, oflag_t flags, usize mode) PSYS_WARN_UNUSED;
+fd_t sys_open(const char* path, openflag_t flags, usize mode) PSYS_WARN_UNUSED;
+fd_t sys_openat(fd_t, const char* path, openflag_t flags, usize mode) PSYS_WARN_UNUSED;
 fd_t sys_create(const char* path, usize mode);
 err_t sys_close(fd_t fd);
 isize sys_write(fd_t fd, const void* data, usize nbyte);

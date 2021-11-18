@@ -268,20 +268,31 @@ static const char* getvar(const tplvar_t* varv, int varc, const char* name, int 
 }
 
 
-static int parse_args(char* input, char** argv, int argv_cap) {
+static int parse_args(char* input, char** argv, int argv_cap, const char** res_typ) {
   char* sep = ", ";
   char* tok;
   char* state;
   int i = 0;
+  bool isend = false;
   for (tok = strtok_r(input, sep, &state); tok; tok = strtok_r(NULL, sep, &state)) {
     if (i % 2 == 0) {
       // plog("name '%s'", tok);
-      argv[i] = tok;
+      if (strcmp(tok, "->") == 0) {
+        isend = true;
+      } else {
+        argv[i] = tok;
+      }
     } else {
-      if (i >= argv_cap)
-        return -1;
-      // plog("type '%s'", tok);
-      argv[i] = tok;
+      if (isend) {
+        *res_typ = tok;
+        i--; // for "->"
+        break;
+      } else {
+        if (i >= argv_cap)
+          return -1; // too many args
+        // plog("type '%s'", tok);
+        argv[i] = tok;
+      }
     }
     i++;
   }
@@ -321,6 +332,8 @@ static void str_append_tr(etab_t* etab, table_t* t, int row, const char* fmt, ..
         if (fmt[i] == '>') {
           etab->ralign[etab_col] = true;
           i++;
+        } else {
+          etab->ralign[etab_col] = false;
         }
         if (fmt[i] != '}' || i+1 >= fmtlen)
           errx(1, "malformed { in %s", __FUNCTION__);
@@ -426,6 +439,10 @@ static bool gen_c(FILE* outf, doc_t* spec, const char* tplfile, void** mnext) {
   str_appendcstr(ALLOCVAR("cstr"), "const char*");
   str_appendcstr(ALLOCVAR("ptr"), "const void*");
   str_appendcstr(ALLOCVAR("mutptr"), "void*");
+  str_appendcstr(ALLOCVAR("ptrptr"), "void**");
+  str_appendcstr(ALLOCVAR("fdptr"), "fd" TYPE_SUFFIX "*");
+  str_appendcstr(ALLOCVAR("ioring_params"), ns "ioring_params_t");
+  str_appendcstr(ALLOCVAR("*ioring_params"), ns "ioring_params_t*");
 
   // add types to set of vars
   t = get_table(spec, "types");
@@ -435,12 +452,13 @@ static bool gen_c(FILE* outf, doc_t* spec, const char* tplfile, void** mnext) {
   }
 
   fmt_table_entry_t entries[] = {
-    {"TYPES",      "types",      "typedef {1}\t{0}" TYPE_SUFFIX ";\t// {2}\n"},
-    {"CONSTANTS",  "constants",  "#define " NS "{0}\t(({1}" TYPE_SUFFIX "){2})\t// {3}\n"},
-    {"ERR_ENUM",   "errors",     "  " ns "err_{0}\t=\t{R>},\t// {1}\n"},
-    {"ERR_SWITCH", "errors",     "  case " ns "err_{0}:\treturn \"{0}\";\n"},
-    {"OFLAG_ENUM", "open_flags", "  " ns "open_{0}\t=\t{1>},\t// {2}\n"},
-    {"SYSOP_ENUM", "sysops",     "  " ns sysop_prefix "{0}\t=\t{1>},\t// {2}\n"},
+    {"TYPES",      "types",         "typedef {1}\t{0}" TYPE_SUFFIX ";\t// {2}\n"},
+    {"CONSTANTS",  "constants",     "#define " NS "{0}\t(({1}" TYPE_SUFFIX "){2})\t// {3}\n"},
+    {"ERR_ENUM",   "errors",        "  " ns "err_{0}\t=\t{R>},\t// {1}\n"},
+    {"ERR_SWITCH", "errors",        "  case " ns "err_{0}:\treturn \"{0}\";\n"},
+    {"OPENFLAG_ENUM", "open_flags", "  " ns "open_{0}\t=\t{1>},\t// {2}\n"},
+    {"MMAPFLAG_ENUM", "mmap_flags", "  " ns "mmap_{0}\t=\t{1>},\t// {2}\n"},
+    {"SYSOP_ENUM", "sysops",        "  " ns sysop_prefix "{0}\t=\t{1>},\n"},
   };
   varc += fmt_table_entries(
     spec, &vars[varc], countof(vars)-varc, entries, countof(entries));
@@ -448,7 +466,7 @@ static bool gen_c(FILE* outf, doc_t* spec, const char* tplfile, void** mnext) {
   s = ALLOCVAR("SYSCALL_FN_PROTOTYPES");
   t = get_table(spec, "sysops");
   int i = 0;
-  const char* res_typ = "isize"; //VAR("res");
+  const char* res_typ;
   char* argv[PSYS_SYSCALL_MAXARGS][2]; // [name, type], [name, type] ...
   if (t->ncols > 2) for (int row = 0; row < t->nrows; row++) {
     str_t* name = table_cell(t, row, 0);
@@ -457,12 +475,14 @@ static bool gen_c(FILE* outf, doc_t* spec, const char* tplfile, void** mnext) {
       continue;
     // parse args
     char* input = strdup(args->p);
-    int argc = parse_args(input, (char**)argv, countof(argv)*2);
+    res_typ = "isize";
+    int argc = parse_args(input, (char**)argv, countof(argv)*2, &res_typ);
     if (argc < 0) {
       if (argc == -2)
         errx(1, "malformed arguments: \"%s\" (missing name or type)", args->p);
       errx(1, "too many args for syscall op %s", name->p);
     }
+    res_typ = VAR(res_typ);
     // format
     if (i++) str_appendcstr(s, "\n");
     int linestart = s->len;
@@ -492,9 +512,11 @@ static bool gen_c(FILE* outf, doc_t* spec, const char* tplfile, void** mnext) {
       continue;
     // parse args
     char* input = strdup(args->p);
-    int argc = parse_args(input, (char**)argv, countof(argv)*2);
+    res_typ = "isize";
+    int argc = parse_args(input, (char**)argv, countof(argv)*2, &res_typ);
     if (argc < 0)
       errx(1, "too many args for syscall op %s", name->p);
+    res_typ = VAR(res_typ);
     // format
     if (i++) str_appendcstr(s, "\n");
     int linestart = s->len;
@@ -514,7 +536,16 @@ static bool gen_c(FILE* outf, doc_t* spec, const char* tplfile, void** mnext) {
     }
     str_appendcstr(s, ") {\n");
     linestart = s->len;
-    str_fmt(s, "  return _%ssyscall%d(%s%s%s", ns, argc, ns, sysop_prefix, name->p);
+
+    char ret_cast[64];
+    if (strcmp(res_typ, "isize") != 0) {
+      snprintf(ret_cast, sizeof(ret_cast), "(%s)", res_typ);
+    } else {
+      ret_cast[0] = 0;
+    }
+    str_fmt(s, "  return %s_%ssyscall%d(%s%s%s",
+      ret_cast, ns, argc, ns, sysop_prefix, name->p);
+
     const char* argcast = "(isize)";
     for (int i = 0; i < argc; i++) {
       int addlen = (int)(strlen(argv[i][0]) + 2 + strlen(argcast));

@@ -5,54 +5,19 @@
 
 // POSIX backend using host platform libc
 
-#include <playsys.h>
-#include <playwgpu.h> // backend interface
+#define SYS_DEBUG // define to enable debug logging
+#include "sys_impl.h"
 
 #include <fcntl.h>  // open
 #include <unistd.h> // close, read, write
 #include <stdlib.h> // exit
+#include <string.h> // memcmp
 #include <time.h>   // nanosleep
 #include <sys/errno.h>
 #include <sys/socket.h> // socketpair
 #include <assert.h>
 
-#define SYS_API_VERSION       1 // used by uname
 #define SYS_SPECIAL_FS_PREFIX "/sys"
-
-#define static_assert _Static_assert
-
-#if __has_attribute(musttail)
-  #define MUSTTAIL __attribute__((musttail))
-#else
-  #define MUSTTAIL
-#endif
-
-#define sys_countof(x) \
-  ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
-
-#define XSTR(s) STR(s)
-#define STR(s) #s
-
-#define DEBUG
-#ifdef DEBUG
-  #include <stdio.h>
-  #include <string.h> // strerror
-  #define dlog(fmt, ...) fprintf(stderr, "[%s] " fmt "\n", __func__, ##__VA_ARGS__)
-#else
-  #define dlog(fmt, ...) ((void)0)
-#endif
-
-
-#define MAX(a,b) \
-  ({__typeof__ (a) _a = (a); __typeof__ (b) _b = (b); _a > _b ? _a : _b; })
-  // turns into CMP + CMOV{L,G} on x86_64
-  // turns into CMP + CSEL on arm64
-
-#define MIN(a,b) \
-  ({__typeof__ (a) _a = (a); __typeof__ (b) _b = (b); _a < _b ? _a : _b; })
-  // turns into CMP + CMOV{L,G} on x86_64
-  // turns into CMP + CSEL on arm64
-
 
 extern int errno;
 
@@ -73,17 +38,127 @@ static err_t set_nonblock(fd_t fd) {
 
 
 // ---------------------------------------------------
+// vfile on pipe or socketpair
+
+// virtual file type
+typedef enum {
+  VFILE1_NULL,
+  VFILE1_WGPU_DEV,  // p_wgpu_dev_t
+  VFILE1_GUI_SURF,  // p_gui_surf_t
+} vfile1_type_t;
+
+// virtual file data
+typedef struct vfile1 vfile1_t;
+struct vfile1 {
+  fd_t         fd_user; // user's end of pipe/channel
+  fd_t         fd_impl; // implementation's end of pipe/channel
+  vfile1_type_t type;
+  union {
+    void*         ptr;
+    p_wgpu_dev_t* dev;  // type VFILE1_WGPU_DEV
+    p_gui_surf_t* surf; // type VFILE1_GUI_SURF
+  };
+  // event handlers
+  isize(*on_close)(vfile1_t*);
+  isize(*on_read)(vfile1_t*, void* data, usize size);
+  isize(*on_write)(vfile1_t*, const void* data, usize size);
+  // if set, on_close is called just before the file's fds are closed.
+  // if set, on_{read,write} OVERRIDES _psys_{read,write}.
+};
+
+// storage of open virtual files
+// TODO: something better than this array for storage
+static vfile1_t g_vfile1v[32] = {0};
+static u32      g_vfile1c = 0;
+
+static fd_t vfile1_open(vfile1_type_t type, usize flags, vfile1_t** f_out) {
+  // allocate vfile1_t struct
+  if (g_vfile1c == countof(g_vfile1v))
+    return p_err_invalid; // FIXME ("out of memory" or "resources")
+  vfile1_t* f = &g_vfile1v[g_vfile1c++];
+  memset(f, 0, sizeof(vfile1_t));
+  f->type = type;
+
+  // create pipe or channel
+  int r;
+  int fd[2];
+  if (flags & p_open_rw) {
+    r = socketpair(AF_UNIX, SOCK_STREAM, 0, fd);
+  } else {
+    r = pipe(fd); // fd[0] = readable, fd[1] writable
+    if (flags & p_open_wonly) {
+      // swap so that fd_user is writable and fd_impl is readable.
+      // i.e. after the swap: fd[0] = writable, fd[1] readable
+      int fd0 = fd[0];
+      fd[0] = fd[1];
+      fd[1] = fd0;
+    }
+  }
+  if (r < 0) {
+    g_vfile1c--;
+    return err_from_errno(errno);
+  }
+
+  f->fd_user = (fd_t)fd[0];
+  f->fd_impl = (fd_t)fd[1];
+
+  *f_out = f;
+  return f->fd_user;
+}
+
+
+static vfile1_t* vfile1_lookup(fd_t fd_user) {
+  for (u32 i = 0; i < g_vfile1c; i++) {
+    if (g_vfile1v[i].fd_user == fd_user)
+      return &g_vfile1v[i];
+  }
+  return NULL;
+}
+
+
+static err_t vfile1_close(vfile1_t* f) {
+  int r1 = close((int)f->fd_user);
+  int errno1 = errno;
+  int r2 = close((int)f->fd_impl);
+  int errno2 = errno;
+  err_t ret = f->on_close ? f->on_close(f) : 0;
+
+  // remove f from g_vfile1v
+  for (u32 i = 0; i < g_vfile1c; i++) {
+    if (&g_vfile1v[i] == f) {
+      i++;
+      for (; i < g_vfile1c; i++)
+        g_vfile1v[i - 1] = g_vfile1v[i];
+      g_vfile1c--;
+      break;
+    }
+  }
+
+  if (r1 != 0)
+    return err_from_errno(errno1);
+  if (r2 != 0)
+    return err_from_errno(errno2);
+  return ret;
+}
+
+
+// ---------------------------------------------------
 // sys_syscall op implementations
 
 
-static isize sys_syscall_test(psysop_t op, isize checkop) {
+static err_t _psys_mmap(void** addr, usize length, mmapflag_t flag, fd_t fd, usize offs) {
+  return p_err_nomem;
+}
+
+
+static isize _psys_test(psysop_t op, isize checkop) {
   if (op > p_sysop_write)
     return p_err_not_supported;
   return 0;
 }
 
 
-static isize sys_syscall_exit(psysop_t op, isize status) {
+static isize _psys_exit(psysop_t op, isize status) {
   exit((int)status);
   return 0;
 }
@@ -117,120 +192,22 @@ static isize open_uname(psysop_t op, const char* path, usize flags, isize mode) 
 }
 
 
-
-typedef enum {
-  VFILE_NULL,
-  VFILE_WGPU_DEV,  // p_wgpu_dev_t
-  VFILE_GUI_SURF, // p_gui_surf_t
-} vfile_type_t;
-
-typedef struct vfile {
-  fd_t         fd_user; // user's end of pipe/channel
-  fd_t         fd_impl; // implementation's end of pipe/channel
-  vfile_type_t type;
-  union {
-    void*         ptr;
-    p_wgpu_dev_t* dev;  // type VFILE_WGPU_DEV
-    p_gui_surf_t* surf; // type VFILE_GUI_SURF
-  };
-  isize(*on_close)(struct vfile*);
-  isize(*on_read)(struct vfile*, void* data, usize size);
-  isize(*on_write)(struct vfile*, const void* data, usize size);
-  // if set, on_close is called just before the file's fds are closed.
-  // if set, on_{read,write} OVERRIDES sys_syscall_{read,write}.
-} vfile_t;
-
-static vfile_t g_vfilev[32] = {0};
-static u32     g_vfilec = 0;
-
-
-static fd_t vfile_open(vfile_type_t type, usize flags, vfile_t** f_out) {
-  // allocate vfile_t struct
-  if (g_vfilec == sys_countof(g_vfilev))
-    return p_err_invalid; // FIXME ("out of memory" or "resources")
-  vfile_t* f = &g_vfilev[g_vfilec++];
-  memset(f, 0, sizeof(vfile_t));
-  f->type = type;
-
-  // create pipe or channel
-  int r;
-  int fd[2];
-  if (flags & p_open_rw) {
-    r = socketpair(AF_UNIX, SOCK_STREAM, 0, fd);
-  } else {
-    r = pipe(fd); // fd[0] = readable, fd[1] writable
-    if (flags & p_open_wonly) {
-      // swap so that fd_user is writable and fd_impl is readable.
-      // i.e. after the swap: fd[0] = writable, fd[1] readable
-      int fd0 = fd[0];
-      fd[0] = fd[1];
-      fd[1] = fd0;
-    }
-  }
-  if (r < 0) {
-    g_vfilec--;
-    return err_from_errno(errno);
-  }
-
-  f->fd_user = (fd_t)fd[0];
-  f->fd_impl = (fd_t)fd[1];
-
-  *f_out = f;
-  return f->fd_user;
-}
-
-
-static vfile_t* vfile_lookup(fd_t fd_user) {
-  for (u32 i = 0; i < g_vfilec; i++) {
-    if (g_vfilev[i].fd_user == fd_user)
-      return &g_vfilev[i];
-  }
-  return NULL;
-}
-
-
-static isize vfile_close(vfile_t* f) {
-  int r1 = close((int)f->fd_user);
-  int errno1 = errno;
-  int r2 = close((int)f->fd_impl);
-  int errno2 = errno;
-  isize ret = f->on_close ? f->on_close(f) : 0;
-
-  // remove f from g_vfilev
-  for (u32 i = 0; i < g_vfilec; i++) {
-    if (&g_vfilev[i] == f) {
-      i++;
-      for (; i < g_vfilec; i++)
-        g_vfilev[i - 1] = g_vfilev[i];
-      g_vfilec--;
-      break;
-    }
-  }
-
-  if (r1 != 0)
-    return err_from_errno(errno1);
-  if (r2 != 0)
-    return err_from_errno(errno2);
-  return ret;
-}
-
-
-static isize close_wgpu_dev(vfile_t* f) {
+static isize close_wgpu_dev(vfile1_t* f) {
   return p_wgpu_dev_close(f->dev);
 }
 
 static isize open_wgpu_dev(psysop_t op, const char* path, usize flags, isize mode) {
   if (flags & p_open_wonly)
     return p_err_invalid;
-  vfile_t* f;
-  fd_t fd = vfile_open(VFILE_WGPU_DEV, flags, &f);
+  vfile1_t* f;
+  fd_t fd = vfile1_open(VFILE1_WGPU_DEV, flags, &f);
   if (fd < 0)
     return fd;
   int adapter_id = -1; // TODO: parse "path"
   p_wgpu_dev_flag_t fl = (flags & p_open_ronly) ? p_wgpu_dev_fl_ronly : 0;
   err_t e = p_wgpu_opendev(&f->dev, f->fd_impl, f->fd_user, adapter_id, fl);
   if (e < 0) {
-    vfile_close(f);
+    vfile1_close(f);
     return e;
   }
   f->on_close = close_wgpu_dev;
@@ -238,16 +215,16 @@ static isize open_wgpu_dev(psysop_t op, const char* path, usize flags, isize mod
 }
 
 
-static isize sys_syscall_wgpu_opendev(psysop_t op, usize flags) {
-  vfile_t* f;
-  fd_t fd = vfile_open(VFILE_WGPU_DEV, flags, &f);
+static isize _psys_wgpu_opendev(psysop_t op, usize flags) {
+  vfile1_t* f;
+  fd_t fd = vfile1_open(VFILE1_WGPU_DEV, flags, &f);
   if (fd < 0)
     return fd;
   int adapter_id = -1; // TODO allow configuration via syscall arguments
   p_wgpu_dev_flag_t fl = (p_wgpu_dev_flag_t)flags;
   err_t e = p_wgpu_opendev(&f->dev, f->fd_impl, f->fd_user, adapter_id, fl);
   if (e < 0) {
-    vfile_close(f);
+    vfile1_close(f);
     return e;
   }
   f->on_close = close_wgpu_dev;
@@ -255,26 +232,26 @@ static isize sys_syscall_wgpu_opendev(psysop_t op, usize flags) {
 }
 
 
-static isize close_gui_surf(vfile_t* f) {
+static isize close_gui_surf(vfile1_t* f) {
   return p_gui_surf_close(f->surf);
 }
 
-static isize read_gui_surf(vfile_t* f, void* data, usize size) {
+static isize read_gui_surf(vfile1_t* f, void* data, usize size) {
   return p_gui_surf_read(f->surf, data, size);
 }
 
-static isize sys_syscall_gui_mksurf(
+static isize _psys_gui_mksurf(
   psysop_t op, u32 width, u32 height, fd_t device, usize flags)
 {
-  vfile_t* f;
-  fd_t fd = vfile_open(VFILE_GUI_SURF, p_open_wonly, &f);
+  vfile1_t* f;
+  fd_t fd = vfile1_open(VFILE1_GUI_SURF, p_open_wonly, &f);
   if (fd < 0)
     return fd;
   isize r = set_nonblock(f->fd_impl); // enable read()ing data of unknown length
   // TODO: consider using writev & readv instead.
   // TODO: consider fully virtual I/O: add buffer to p_gui_surf_t and set f->on_read.
   if (r != 0) {
-    vfile_close(f);
+    vfile1_close(f);
     return r;
   }
   p_gui_surf_descr_t d = {
@@ -285,7 +262,7 @@ static isize sys_syscall_gui_mksurf(
   };
   r = p_gui_surf_open(&f->surf, f->fd_impl, f->fd_user, &d);
   if (r < 0) {
-    vfile_close(f);
+    vfile1_close(f);
     return r;
   }
   f->on_close = close_gui_surf;
@@ -315,7 +292,7 @@ static isize open_special(psysop_t op, const char* path, usize flags, isize mode
 }
 
 
-static isize sys_syscall_openat(
+static isize _psys_openat(
   psysop_t op, fd_t atfd, const char* path, usize flags, isize mode)
 {
   if (atfd == P_AT_FDCWD) {
@@ -350,20 +327,35 @@ static isize sys_syscall_openat(
 }
 
 
-static isize sys_syscall_close(psysop_t op, fd_t fd) {
-  vfile_t* f = vfile_lookup(fd);
-  if (f)
-    return vfile_close(f);
-
-  if (close((int)fd) != 0)
+err_t _psys_pipe(psysop_t op, fd_t* fdp, u32 flags) {
+  if (pipe(fdp) != 0)
     return err_from_errno(errno);
-
   return 0;
 }
 
 
-static isize sys_syscall_read(psysop_t op, fd_t fd, void* data, usize size) {
+err_t _psys_close_host(psysop_t op, fd_t fd) {
+  if (close((int)fd) != 0)
+    return err_from_errno(errno);
+  return 0;
+}
+
+
+err_t _psys_close(psysop_t op, fd_t fd) {
+  vfile1_t* f1 = vfile1_lookup(fd);
+  if (f1)
+    return vfile1_close(f1);
+
   vfile_t* f = vfile_lookup(fd);
+  if (f)
+    return vfile_close(f);
+
+  return _psys_close_host(0, fd);
+}
+
+
+static isize _psys_read(psysop_t op, fd_t fd, void* data, usize size) {
+  vfile1_t* f = vfile1_lookup(fd);
   if (f && f->on_read)
     return f->on_read(f, data, size);
 
@@ -374,8 +366,8 @@ static isize sys_syscall_read(psysop_t op, fd_t fd, void* data, usize size) {
 }
 
 
-static isize sys_syscall_write(psysop_t op, fd_t fd, const void* data, usize size) {
-  vfile_t* f = vfile_lookup(fd);
+static isize _psys_write(psysop_t op, fd_t fd, const void* data, usize size) {
+  vfile1_t* f = vfile1_lookup(fd);
   if (f && f->on_write)
     return f->on_write(f, data, size);
 
@@ -386,7 +378,7 @@ static isize sys_syscall_write(psysop_t op, fd_t fd, const void* data, usize siz
 }
 
 
-static isize sys_syscall_sleep(psysop_t op, usize seconds, usize nanoseconds) {
+static isize _psys_sleep(psysop_t op, usize seconds, usize nanoseconds) {
   struct timespec rqtp = { .tv_sec = seconds, .tv_nsec = nanoseconds };
   // struct timespec remaining;
   int r = nanosleep(&rqtp, 0/*&remaining*/);
@@ -398,7 +390,7 @@ static isize sys_syscall_sleep(psysop_t op, usize seconds, usize nanoseconds) {
 }
 
 
-static isize sys_syscall_NOT_IMPLEMENTED(psysop_t op) {
+static isize _psys_NOT_IMPLEMENTED(psysop_t op) {
   return p_err_not_supported;
 }
 
@@ -410,22 +402,28 @@ isize p_syscall(
   psysop_t op, isize arg1, isize arg2, isize arg3, isize arg4, isize arg5)
 {
   //dlog("sys_syscall %u, %ld, %ld, %ld, %ld, %ld", op,arg1,arg2,arg3,arg4,arg5);
-  switch ((enum _p_sysop)op) {
-    case p_sysop_test:   FORWARD(sys_syscall_test);
-    case p_sysop_exit:   FORWARD(sys_syscall_exit);
-    case p_sysop_openat: FORWARD(sys_syscall_openat);
-    case p_sysop_close:  FORWARD(sys_syscall_close);
-    case p_sysop_read:   FORWARD(sys_syscall_read);
-    case p_sysop_write:  FORWARD(sys_syscall_write);
-    case p_sysop_sleep:  FORWARD(sys_syscall_sleep);
+  switch ((enum p_sysop)op) {
+    case p_sysop_test:   FORWARD(_psys_test);
+    case p_sysop_exit:   FORWARD(_psys_exit);
+    case p_sysop_openat: FORWARD(_psys_openat);
+    case p_sysop_close:  FORWARD(_psys_close);
+    case p_sysop_read:   FORWARD(_psys_read);
+    case p_sysop_write:  FORWARD(_psys_write);
+    case p_sysop_sleep:  FORWARD(_psys_sleep);
+    case p_sysop_mmap:   FORWARD(_psys_mmap);
+    case p_sysop_pipe:   FORWARD(_psys_pipe);
 
-    case p_sysop_seek:     FORWARD(sys_syscall_NOT_IMPLEMENTED);
-    case p_sysop_statat:   FORWARD(sys_syscall_NOT_IMPLEMENTED);
-    case p_sysop_removeat: FORWARD(sys_syscall_NOT_IMPLEMENTED);
-    case p_sysop_renameat: FORWARD(sys_syscall_NOT_IMPLEMENTED);
+    case p_sysop_ioring_setup:    FORWARD(_psys_ioring_setup);
+    case p_sysop_ioring_enter:    FORWARD(_psys_ioring_enter);
+    case p_sysop_ioring_register: FORWARD(_psys_ioring_register);
 
-    case p_sysop_wgpu_opendev: FORWARD(sys_syscall_wgpu_opendev);
-    case p_sysop_gui_mksurf:   FORWARD(sys_syscall_gui_mksurf);
+    case p_sysop_seek:     FORWARD(_psys_NOT_IMPLEMENTED);
+    case p_sysop_statat:   FORWARD(_psys_NOT_IMPLEMENTED);
+    case p_sysop_removeat: FORWARD(_psys_NOT_IMPLEMENTED);
+    case p_sysop_renameat: FORWARD(_psys_NOT_IMPLEMENTED);
+
+    case p_sysop_wgpu_opendev: FORWARD(_psys_wgpu_opendev);
+    case p_sysop_gui_mksurf:   FORWARD(_psys_gui_mksurf);
   }
   return p_err_sys_op;
 }

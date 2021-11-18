@@ -15,28 +15,26 @@ void read_file(const char* path, void* buf, usize cap) {
 
 
 err_t read_gui_msg(fd_t gui_surf) {
+  // read message header
   p_gui_msghdr_t mh;
   isize n = read(gui_surf, &mh, sizeof(mh));
-  if (n != sizeof(mh)) {
-    if (n > 0) {
-      print("short read\n");
+  if (n < 1)
+    return n;
+
+  // read message payload
+  switch (mh.type) {
+  case P_GUI_MSG_SURFINFO: {
+    p_gui_surfinfo_t surfinfo = {0};
+    if (read(gui_surf, &surfinfo, sizeof(surfinfo)) != sizeof(surfinfo)) {
+      print("p_gui_ivec2_t short read\n");
       return p_err_invalid;
     }
-    return n;
+    print("surface size: ", surfinfo.width, "x", surfinfo.height, "px @ ",
+          (u32)(surfinfo.dpscale*100), "%\n");
+    if (surfinfo.width <= 0) exit(4);
+    if (surfinfo.height <= 0) exit(5);
+    return 0;
   }
-  switch (mh.type) {
-    case P_GUI_MSG_SURFINFO: {
-      p_gui_surfinfo_t surfinfo = {0};
-      if (read(gui_surf, &surfinfo, sizeof(surfinfo)) != sizeof(surfinfo)) {
-        print("p_gui_ivec2_t short read\n");
-        return p_err_invalid;
-      }
-      print("surface size: ", surfinfo.width, "x", surfinfo.height, "px @ ",
-            (u32)(surfinfo.dpscale*100), "%\n");
-      if (surfinfo.width <= 0) exit(4);
-      if (surfinfo.height <= 0) exit(5);
-      return 0;
-    }
   }
   print("p_gui_ivec2_t unexpected p_gui_msg_t ", mh.type, "\n");
   return p_err_invalid;
@@ -57,6 +55,26 @@ PUB int main(int argc, const char** argv) {
 
   u8* buf[256];
   read_file("/sys/uname", buf, sizeof(buf));
+
+  // ioring
+  p_ioring_params_t ringp = {0};
+  fd_t ring = p_syscall_ioring_setup(/*entries*/1, &ringp);
+  check_status(ring, "p_syscall_ioring_setup");
+  print("p_syscall_ioring_setup OK\n");
+
+
+  // map ring buffer memory
+  usize sring_size = (usize)ringp.sq_off.array + ringp.sq_entries * sizeof(u32);
+  usize cring_size = (usize)ringp.cq_off.cqes + ringp.cq_entries * sizeof(p_ioring_cqe_t);
+  usize ring_size = sring_size > cring_size ? sring_size : cring_size; // max
+  void* ring_sq_ptr = NULL;
+  err_t err = p_syscall_mmap(
+    &ring_sq_ptr,
+    ring_size,
+    p_mmap_prot_read | p_mmap_prot_write | p_mmap_shared | p_mmap_populate,
+    ring,
+    P_IORING_OFF_SQ_RING);
+  check_status(err, "mmap P_IORING_OFF_SQ_RING");
 
   // WebGPU concepts
   //   device
@@ -116,6 +134,7 @@ PUB int main(int argc, const char** argv) {
 
   check_status(close(gui_surf), "close(wgpu_surf)");
   // check_status(close(wgpu_dev), "close(wgpu_dev)");
+  check_status(close(ring), "close(ring)");
 
   return 0;
 }
@@ -135,7 +154,10 @@ void check_status(isize r, const char* contextmsg) {
   if (r >= 0)
     return;
   const char* errname = p_errname((err_t)r);
-  printerr("error: "); printerr(errname);
+  printerr("error: ");
+  printerr(p_err_str((err_t)r));
+  printerr("; ");
+  printerr(errname);
   if (contextmsg && strlen(contextmsg)) {
     printerr(" ("); printerr(contextmsg); printerr(")\n");
   } else {

@@ -19,6 +19,8 @@ f64    | 64 bit IEEE 754 floating-point number
 isize  | arch-address sized signed integer
 usize  | arch-address sized unsigned integer
 ptr    | memory address (a pointer; `void*` in C)
+ptrptr | memory address to ptr (`void**` in C)
+fdptr  | memory address to fd (`fd_t*` in C)
 cstr   | array of bytes with a 0 terminator byte (UTF-8)
 
 
@@ -26,12 +28,13 @@ cstr   | array of bytes with a 0 terminator byte (UTF-8)
 
 [](# ":types")
 
-name   | type       | purpose
--------|------------|---------------------------------------------------------
-psysop | usize      | syscall operation code
-oflag  | usize      | flags to openat syscall
-err    | isize      | error code. Only negative values.
-fd     | isize      | file descriptor
+name      | type     | purpose
+----------|----------|---------------------------------------------------------
+psysop    | usize    | syscall operation code
+openflag  | u32      | flags to openat syscall
+mmapflag  | u32      | flags to mmap syscall
+err       | i32      | error code (negative values)
+fd        | i32      | file descriptor (positive values)
 
 
 ### Symbolic constants
@@ -102,19 +105,66 @@ wasm         | WASM (args on stack)
 
 name                          | psysop | arguments
 ------------------------------|-------:|--------------------------------------------
-[openat](#openat)             |    257 | base fd, path cstr, flags oflag, mode usize
-[close](#close)               |      3 | fd fd
+[openat](#openat)             |    257 | base fd, path cstr, flags openflag, mode usize -> fd
+[close](#close)               |      3 | fd fd -> err
 [read](#read)                 |      0 | fd fd, data mutptr, nbyte usize
 [write](#write)               |      1 | fd fd, data ptr, nbyte usize
 [seek](#seek)                 |      8 | _TODO_
-[statat](#statat)             |    262 | _TODO_ (newfstatat in linux, alt: statx 332)
-[removeat](#removeat)         |    263 | base fd, path cstr, flags usize
-[renameat](#renameat)         |    264 | oldbase fd, oldpath cstr, newbase fd, newpath cstr
+[statat](#statat)             |    262 | _TODO_ (newfstatat in linux, alt: statx 332) -> err
+[removeat](#removeat)         |    263 | base fd, path cstr, flags usize -> err
+[renameat](#renameat)         |    264 | oldbase fd, oldpath cstr, newbase fd, newpath cstr -> err
 [sleep](#sleep)               |    230 | seconds usize, nanoseconds usize
-[exit](#exit)                 |     60 | status_code i32
-[test](#test)                 |  10000 | op psysop
-[wgpu_opendev](#wgpu_opendev) |  10001 | flags usize
-[gui_mksurf](#gui_mksurf)     |  10002 | width u32, height u32, device fd, flags usize
+[exit](#exit)                 |     60 | status_code i32 -> err
+[mmap](#mmap)                 |      9 | addr ptrptr, length usize, flag mmapflag, fd fd, offs usize -> err
+[pipe](#pipe)                 |    293 | fdv fdptr, flags u32 -> err
+[test](#test)                 |  10000 | op psysop -> err
+[wgpu_opendev](#wgpu_opendev) |  10001 | flags usize -> fd
+[gui_mksurf](#gui_mksurf)     |  10002 | width u32, height u32, device fd, flags usize -> fd
+[ioring_setup](#ioring_setup)       | 425 | entries u32, params \*ioring_params -> fd
+[ioring_enter](#ioring_enter)       | 426 | ring fd, to_submit u32, min_complete u32, flags u32
+[ioring_register](#ioring_register) | 427 | ring fd, opcode u32, arg ptr, nr_args u32
+
+
+#### mmap
+
+Map files or devices into memory, or allocate memory
+
+    mmap → err
+      addr    ptrptr
+      length  usize
+      flag    mmap_flag
+      fd      fd
+      offs    usize
+
+##### mmap flags
+
+[](# ":mmap_flags")
+
+name       |  value | effect
+-----------|-------:|--------------------------------------------------------------
+prot_none  |      0 | Pages may not be accessed
+prot_read  |    0x1 | Pages may be read
+prot_write |    0x2 | Pages may be written
+prot_exec  |    0x4 | Pages may be executed
+shared     |    0x8 | Share this mapping (impl as MAP_SHARED_VALIDATE)
+private    |   0x10 | Create a private copy-on-write mapping
+fixed      |   0x40 | Place the mapping at exactly the address `addr`
+anonymous  |   0x80 | Not backed by file, contents zero-initialized, fd argument ignored.
+growsdown  |  0x100 | Indicate the mapping should extend downward in memory
+populate   |  0x200 | Populate (prefault) page tables for a mapping
+nonblock   |  0x400 | use with `populate` to not block on prefault
+stack      |  0x800 | Hint to allocate mapping at an address suitable for a process or thread stack
+
+
+#### ioring_setup
+
+Create an I/O ring context
+
+    ioring_setup → fd | err
+      entries u32             Queue size
+      params  *ioring_params
+
+Adapted from [Linux's io_uring](https://github.com/torvalds/linux/blob/v5.15/include/uapi/linux/io_uring.h)
 
 
 #### gui_mksurf
@@ -188,13 +238,10 @@ See [\<sys/stat.h>](https://pubs.opengroup.org/onlinepubs/007904875/basedefs/sys
 name              | psysop | comments
 ------------------|-------:|-------------------------------------
 mkdirat           |    258 | can we use openat with a flag instead?
-ioring_setup      |    425 | count u32, \*io_uring_params_t
-ioring_enter      |    426 | ring fd, to_submit u32, min_complete u32, flags u32
-ioring_register   |    427 | ring fd, opcode u32, arg ptr, nr_args u32
 readv             |     19 | Needed for ioring
 writev            |     20 | Needed for ioring
-memmap            |      9 | Needed for ioring
-memunmap          |     11 | Needed for ioring
+mmap              |      9 | Needed for ioring
+munmap            |     11 | Needed for ioring
 ioctl             |     16 | Needed to set nonblock flags on FDs
 symlinkat         |    265 | create symbolic file link
 readlinkat        |    267 | query symbolic file link

@@ -16,10 +16,11 @@ export type usize = number
 export type f32   = number
 export type f64   = number
 
-export type psysop_t = usize // syscall operation code
-export type oflag_t  = usize // flags to openat syscall
-export type err_t    = isize // error code. Only negative values.
-export type fd_t     = isize // file descriptor
+export type psysop_t   = usize // syscall operation code
+export type openflag_t = u32   // flags to openat syscall
+export type mmapflag_t = u32   // flags to mmap syscall
+export type err_t      = i32   // error code (negative values)
+export type fd_t       = i32   // file descriptor (positive values)
 
 // constants
 export const FDSTDIN  :fd_t =    0 // input stream
@@ -57,19 +58,24 @@ export enum oflag {
 
 // syscall operations
 export enum sysop {
-  openat       =   257, // base fd, path cstr, flags oflag, mode usize
-  close        =     3, // fd fd
-  read         =     0, // fd fd, data mutptr, nbyte usize
-  write        =     1, // fd fd, data ptr, nbyte usize
-  seek         =     8, // TODO
-  statat       =   262, // TODO (newfstatat in linux, alt: statx 332)
-  removeat     =   263, // base fd, path cstr, flags usize
-  renameat     =   264, // oldbase fd, oldpath cstr, newbase fd, newpath cstr
-  sleep        =   230, // seconds usize, nanoseconds usize
-  exit         =    60, // status_code i32
-  test         = 10000, // op psysop
-  wgpu_opendev = 10001, // flags usize
-  gui_mksurf   = 10002, // width u32, height u32, device fd, flags usize
+  openat          =   257, // base fd, path cstr, flags openflag, mode usize -> fd
+  close           =     3, // fd fd -> err
+  read            =     0, // fd fd, data mutptr, nbyte usize
+  write           =     1, // fd fd, data ptr, nbyte usize
+  seek            =     8, // TODO
+  statat          =   262, // TODO (newfstatat in linux, alt: statx 332) -> err
+  removeat        =   263, // base fd, path cstr, flags usize -> err
+  renameat        =   264, // oldbase fd, oldpath cstr, newbase fd, newpath cstr -> err
+  sleep           =   230, // seconds usize, nanoseconds usize
+  exit            =    60, // status_code i32 -> err
+  mmap            =     9, // addr ptrptr, length usize, flag mmapflag, fd fd, offs usize -> err
+  pipe            =   293, // fdv fdptr, flags u32 -> err
+  test            = 10000, // op psysop -> err
+  wgpu_opendev    = 10001, // flags usize -> fd
+  gui_mksurf      = 10002, // width u32, height u32, device fd, flags usize -> fd
+  ioring_setup    =   425, // entries u32, params *ioring_params -> fd
+  ioring_enter    =   426, // ring fd, to_submit u32, min_complete u32, flags u32
+  ioring_register =   427, // ring fd, opcode u32, arg ptr, nr_args u32
 }
 
 // Note: this file is generated from spec.md; edit with caution

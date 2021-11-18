@@ -43,22 +43,226 @@ $TYPES
 $CONSTANTS
 
 // errors (possible values of type ${err})
-enum _${ns}err {
+enum ${ns}err {
 $ERR_ENUM
 };
 
-// open flags (possible bits of type ${oflag})
-enum _${ns}oflag {
-$OFLAG_ENUM
+// open flags (possible bits of type ${openflag})
+enum ${ns}openflag {
+$OPENFLAG_ENUM
+};
+
+// mmap flags (possible bits of type ${mmapflag})
+enum ${ns}mmapflag {
+$MMAPFLAG_ENUM
 };
 
 // syscall operations (possible values of type ${psysop})
-enum _${ns}sysop {
+enum ${ns}sysop {
 $SYSOP_ENUM
 };
 
 // ${ns}syscall calls the host system
 ${NS2}EXTERN isize ${ns}syscall(${psysop},isize,isize,isize,isize,isize) ${NS2}WARN_UNUSED;
+
+// --- ioring ---
+
+// ${NS}IORING_OFF_ are magic offsets for the application to mmap the data it needs
+#define ${NS}IORING_OFF_SQ_RING 0ULL
+#define ${NS}IORING_OFF_CQ_RING 0x8000000ULL
+#define ${NS}IORING_OFF_SQES    0x10000000ULL
+
+// flags for ${ns}ioring_sqe_t
+enum ${ns}ioring_sqeflag {
+  ${NS}IORING_SQE_FIXED_FILE    = 1U << 0, // use fixed fileset
+  ${NS}IORING_SQE_IO_DRAIN      = 1U << 1, // issue after inflight IO
+  ${NS}IORING_SQE_IO_LINK       = 1U << 2, // links next sqe
+  ${NS}IORING_SQE_IO_HARDLINK   = 1U << 3, // like LINK, but stronger
+  ${NS}IORING_SQE_ASYNC         = 1U << 4, // always go async
+  ${NS}IORING_SQE_BUFFER_SELECT = 1U << 5, // select buffer from sqe->buf_group
+};
+
+// flags for ${ns}ioring_cqe_t
+enum ${ns}ioring_cqeflag {
+  ${NS}IORING_CQE_F_BUFFER = 1U << 0, // the upper 16 bits are the buffer ID
+  ${NS}IORING_CQE_F_MORE =   1U << 1, // parent SQE will generate more CQE entries
+};
+
+// flags for ${ns}ioring_sqoffsets_t
+enum ${ns}ioring_sqflag {
+  ${NS}IORING_SQ_NEED_WAKEUP = 1U << 0, // needs io_uring_enter wakeup
+  ${NS}IORING_SQ_CQ_OVERFLOW = 1U << 1, // CQ ring is overflown
+};
+
+// flags for ${ns}ioring_cqoffsets_t
+enum ${ns}ioring_cqflag {
+  ${NS}IORING_CQ_EVENTFD_DISABLED = 1U << 0, // disable eventfd notifications
+};
+
+// flags for ${ns}ioring_params_t.flags
+enum ${ns}ioring_setupflag {
+  ${NS}IORING_SETUP_IOPOLL     = 1U << 0, // io_context is polled
+  ${NS}IORING_SETUP_SQPOLL     = 1U << 1, // SQ poll thread
+  ${NS}IORING_SETUP_SQ_AFF     = 1U << 2, // sq_thread_cpu is valid
+  ${NS}IORING_SETUP_CQSIZE     = 1U << 3, // app defines CQ size
+  ${NS}IORING_SETUP_CLAMP      = 1U << 4, // clamp SQ/CQ ring sizes
+  ${NS}IORING_SETUP_ATTACH_WQ  = 1U << 5, // attach to existing wq
+  ${NS}IORING_SETUP_R_DISABLED = 1U << 6, // start with ring disabled
+};
+
+// flags for ${ns}ioring_params_t.features
+enum ${ns}ioring_featflag {
+  ${NS}IORING_FEAT_SINGLE_MMAP     = 1U << 0,
+  ${NS}IORING_FEAT_NODROP          = 1U << 1,
+  ${NS}IORING_FEAT_SUBMIT_STABLE   = 1U << 2,
+  ${NS}IORING_FEAT_RW_CUR_POS      = 1U << 3,
+  ${NS}IORING_FEAT_CUR_PERSONALITY = 1U << 4,
+  ${NS}IORING_FEAT_FAST_POLL       = 1U << 5,
+  ${NS}IORING_FEAT_POLL_32BITS     = 1U << 6,
+  ${NS}IORING_FEAT_SQPOLL_NONFIXED = 1U << 7,
+  ${NS}IORING_FEAT_EXT_ARG         = 1U << 8,
+  ${NS}IORING_FEAT_NATIVE_WORKERS  = 1U << 9,
+  ${NS}IORING_FEAT_RSRC_TAGS       = 1U << 10,
+};
+
+// flags for ioring_enter syscall
+enum ${ns}ioring_enterflag {
+  ${NS}IORING_ENTER_GETEVENTS = 1U << 0,
+  ${NS}IORING_ENTER_SQ_WAKEUP = 1U << 1,
+  ${NS}IORING_ENTER_SQ_WAIT =   1U << 2,
+  ${NS}IORING_ENTER_EXT_ARG =   1U << 3,
+};
+
+// ioring_register syscall opcodes and arguments
+enum {
+  ${NS}IORING_REGISTER_BUFFERS       = 0,
+  ${NS}IORING_UNREGISTER_BUFFERS     = 1,
+  ${NS}IORING_REGISTER_FILES         = 2,
+  ${NS}IORING_UNREGISTER_FILES       = 3,
+  ${NS}IORING_REGISTER_EVENTFD       = 4,
+  ${NS}IORING_UNREGISTER_EVENTFD     = 5,
+  ${NS}IORING_REGISTER_FILES_UPDATE  = 6,
+  ${NS}IORING_REGISTER_EVENTFD_ASYNC = 7,
+  ${NS}IORING_REGISTER_PROBE         = 8,
+  ${NS}IORING_REGISTER_PERSONALITY   = 9,
+  ${NS}IORING_UNREGISTER_PERSONALITY = 10,
+  ${NS}IORING_REGISTER_RESTRICTIONS  = 11,
+  ${NS}IORING_REGISTER_ENABLE_RINGS  = 12,
+
+  // extended with tagging
+  ${NS}IORING_REGISTER_FILES2         = 13,
+  ${NS}IORING_REGISTER_FILES_UPDATE2  = 14,
+  ${NS}IORING_REGISTER_BUFFERS2       = 15,
+  ${NS}IORING_REGISTER_BUFFERS_UPDATE = 16,
+
+  // set/clear io-wq thread affinities
+  ${NS}IORING_REGISTER_IOWQ_AFF   = 17,
+  ${NS}IORING_UNREGISTER_IOWQ_AFF = 18,
+
+  // set/get max number of io-wq workers
+  ${NS}IORING_REGISTER_IOWQ_MAX_WORKERS = 19,
+
+  // this goes last
+  ${NS}IORING_REGISTER_LAST
+};
+
+// ${ns}ioring_sqoffsets_t describes an ioring submission queue
+typedef struct _${ns}ioring_sqoffsets {
+  u32 head;
+  u32 tail;
+  u32 ring_mask;
+  u32 ring_entries;
+  u32 flags; // ${NS}IORING_SQ_ flags
+  u32 dropped;
+  u32 array;
+  u32 resv1;
+  u64 resv2;
+} ${ns}ioring_sqoffsets_t;
+
+// ${ns}ioring_cqoffsets_t describes an ioring completion queue
+typedef struct _${ns}ioring_cqoffsets {
+  u32 head;
+  u32 tail;
+  u32 ring_mask;
+  u32 ring_entries;
+  u32 overflow;
+  u32 cqes;
+  u32 flags; // ${NS}IORING_CQ_ flags
+  u32 resv1;
+  u64 resv2;
+} ${ns}ioring_cqoffsets_t;
+
+// ioring configuration, passed to ioring_setup. Updated with info on success.
+typedef struct _${ns}ioring_params {
+  u32 sq_entries;
+  u32 cq_entries;
+  u32 flags; // ${NS}IORING_SETUP_ flags
+  u32 sq_thread_cpu;
+  u32 sq_thread_idle;
+  u32 features; // ${NS}IORING_FEAT_ flags
+  u32 wq_fd;
+  u32 resv[3];
+  ${ns}ioring_sqoffsets_t sq_off;
+  ${ns}ioring_cqoffsets_t cq_off;
+} ${ns}ioring_params_t;
+
+// ioring submission queue entry ("SQE")
+typedef struct _${ns}ioring_sqe {
+  u8   opcode; // type of operation for this sqe
+  u8   flags;  // ${NS}IORING_SQE_ flags
+  u16  ioprio; // ioprio for the request
+  ${fd} fd;     // file descriptor to do IO on
+  union {
+    u64 off;  // offset into file
+    u64 addr2;
+  };
+  union {
+    u64 addr; // pointer to buffer or iovecs
+    u64 splice_off_in;
+  };
+  u32 len; // buffer size or number of iovecs
+  union {
+    int rw_flags; // kernel_rwf_t (see linux/fs.h)
+    u32 fsync_flags;
+    u16 poll_events;   // compatibility
+    u32 poll32_events; // word-reversed for BE
+    u32 sync_range_flags;
+    u32 msg_flags;
+    u32 timeout_flags;
+    u32 accept_flags;
+    u32 cancel_flags;
+    u32 open_flags;
+    u32 statx_flags;
+    u32 fadvise_advice;
+    u32 splice_flags;
+    u32 rename_flags;
+    u32 unlink_flags;
+    u32 hardlink_flags;
+  };
+  u64 user_data;  // data to be passed back at completion time
+  // pack this to avoid bogus arm OABI complaints
+  union {
+    u16 buf_index; // index into fixed buffers, if used
+    u16 buf_group; // for grouped buffer selection
+  } __attribute__((packed));
+  u16 personality; // personality to use, if used
+  union {
+    ${fd} splice_fd_in;
+    u32  file_index;
+  };
+  u64 __pad2[2];
+} ${ns}ioring_sqe_t;
+
+// ioring completion queue entry ("CQE")
+typedef struct _${ns}ioring_cqe {
+  u64 user_data; // sqent->user_data
+  i32 res;       // result code for this event
+  u32 flags;     // ${NS}IORING_CQE_ flags
+} ${ns}ioring_cqe_t;
+
+
+// --- syscall interface functions ---
+
 $SYSCALL_FN_PROTOTYPES
 
 #define _${ns}syscall0 \
@@ -78,7 +282,7 @@ $SYSCALL_FN_IMPLS
 
 // p_err_str returns the symbolic name of an error as a string
 inline static const char* ${ns}err_str(err_t e) {
-  switch ((enum _${ns}err)e) {
+  switch ((enum ${ns}err)e) {
 $ERR_SWITCH
   }
   return "?";

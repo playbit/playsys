@@ -60,6 +60,7 @@ if [ "$CMD" = "watch" ]; then
             ../../backends/wgpu/include \
             ../../backends/wgpu/src/*wasm* \
             ../../backends/posix/*.c \
+            ../../backends/posix/*.h \
             ../../backends/js/*.c \
             ../../include
   done

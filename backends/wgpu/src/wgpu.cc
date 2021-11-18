@@ -44,8 +44,8 @@ struct p_wgpu_res_t {
 };
 
 
-static DawnProcTable              gNativeProcs;
-static dawn_native::Instance      gDawnNative;
+static DawnProcTable               gNativeProcs;
+static dawn_native::Instance       gDawnNative;
 static std::map<fd_t,p_wgpu_res_t> gOpenResources;
 
 
@@ -165,7 +165,7 @@ err_t p_wgpu_opendev(
     delete dev;
     return e;
   }
-  dlog("p_wgpu_dev_open %p fd_user=%ld", dev, fd_user);
+  dlog("p_wgpu_dev_open %p fd_user=%d", dev, fd_user);
   gOpenResources.emplace(fd_user, dev);
   *devp = dev;
   return 0;

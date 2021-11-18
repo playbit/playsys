@@ -6,16 +6,16 @@ void sys_exit(int status) {
   __builtin_unreachable();
 }
 
-fd_t sys_openat(fd_t fd, const char* path, oflag_t flags, usize mode) {
+fd_t sys_openat(fd_t fd, const char* path, openflag_t flags, usize mode) {
   return (fd_t)p_syscall_openat(fd, path, flags, mode);
 }
 
-fd_t sys_open(const char* path, oflag_t flags, usize mode) {
+fd_t sys_open(const char* path, openflag_t flags, usize mode) {
   return (fd_t)p_syscall_openat(P_AT_FDCWD, path, flags, mode);
 }
 
 fd_t sys_create(const char* path, usize mode) {
-  oflag_t fl = p_open_create | p_open_wonly | p_open_trunc;
+  openflag_t fl = p_open_create | p_open_wonly | p_open_trunc;
   return sys_open(path, fl, mode);
 }
 
@@ -40,11 +40,11 @@ isize sys_sleep(usize seconds, usize nanoseconds) {
 // }
 
 const char* p_errname(err_t e) {
-  switch ((enum _p_err)e) {
+  switch ((enum p_err)e) {
     case p_err_none          : return "no error";
     case p_err_badfd         : return "invalid file descriptor";
     case p_err_invalid       : return "invalid data or argument";
-    case p_err_sys_op        : return "invalid syscall op or syscall op data";
+    case p_err_sys_op        : return "invalid syscall";
     case p_err_bad_name      : return "invalid or misformed name";
     case p_err_not_found     : return "resource not found";
     case p_err_name_too_long : return "name too long";

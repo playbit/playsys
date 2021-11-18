@@ -15,8 +15,11 @@ fi
 
 case $(uname -s) in
   Darwin*)
-    test_paths+=( /usr/local/opt/llvm )
-    test_paths+=( /Library/Developer/CommandLineTools/usr )
+    test_paths+=( \
+      /opt/homebrew/opt/llvm \
+      /usr/local/opt/llvm \
+      /Library/Developer/CommandLineTools/usr \
+    )
     ;;
 esac
 

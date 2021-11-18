@@ -33,9 +33,10 @@ cflags_wasm = $
   -Ofast $
   --target=wasm32
 
-cflags_host = $
-  -O3 $
-  -march=native
+# cflags_host = $
+#   -O3 $
+#   -march=native
+cflags_host = -O0
 
 ldflags_macos = $
   -platform_version macos 10.15 10.15 $
@@ -99,6 +100,8 @@ build $builddir/hello_mac_x64_d: ld_macos_x64 $
   $builddir/mac_x64/hello.o $
   $builddir/mac_x64/hello_triangle.o $
   $builddir/mac_x64/syslib.o $
+  $builddir/mac_x64/ioring_darwin.o $
+  $builddir/mac_x64/vfile.o $
   $builddir/mac_x64/sys_posix.o
   ldflags = $ldflags -L$wgpu_lib_dir -rpath $wgpu_lib_dir -lplaywgpu_d -lc++
 
@@ -106,6 +109,8 @@ build $builddir/hello_mac_x64: ld_macos_x64 $
   $builddir/mac_x64/hello.o $
   $builddir/mac_x64/hello_triangle.o $
   $builddir/mac_x64/syslib.o $
+  $builddir/mac_x64/ioring_darwin.o $
+  $builddir/mac_x64/vfile.o $
   $builddir/mac_x64/sys_posix.o $
   $wgpu_lib_dir/libplaywgpu_all.a
 
@@ -130,6 +135,8 @@ build $builddir/mac_x64/hello.o:          c2obj_host hello.c
 build $builddir/mac_x64/hello_triangle.o: c2obj_host hello_triangle.c
 build $builddir/mac_x64/syslib.o:         c2obj_host syslib.c
 build $builddir/mac_x64/sys_posix.o:      c2obj_host $posix_dir/sys_posix.c
+build $builddir/mac_x64/vfile.o:          c2obj_host $posix_dir/vfile.c
+build $builddir/mac_x64/ioring_darwin.o:  c2obj_host $posix_dir/ioring_darwin.c
 
 build $builddir/wasm32/hello.o:          c2obj_wasm hello.c
 build $builddir/wasm32/hello_triangle.o: c2obj_wasm hello_triangle.c
