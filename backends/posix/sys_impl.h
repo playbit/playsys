@@ -1,7 +1,4 @@
-// Copyright 2021 The PlaySys Authors
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// See http://www.apache.org/licenses/LICENSE-2.0
+// SPDX-License-Identifier: Apache-2.0
 
 #pragma once
 #include <playsys.h>
@@ -62,38 +59,51 @@
   // turns into CMP + CSEL on arm64
 
 
-// virtual file type
-typedef enum vfile_type {
-  VFILE_T_NULL,
-  VFILE_T_WGPU_DEV,
-  VFILE_T_GUI_SURF,
-  VFILE_T_IORING,
-  VFILE_T_USER = 1000,
-} vfile_type_t;
-
 // virtual file flags
 typedef enum vfile_flag {
-  VFILE_F_PIPE = 1 << 0, // allocate two fds with pipe(). vfile_open returns "internal" end.
+  // content types
+  VFILE_T_MASK     = 0xff,
+  VFILE_T_WGPU_DEV = 1,
+  VFILE_T_GUI_SURF = 2,
+  VFILE_T_IORING   = 3,
+
+  VFILE_PIPE = 1 << 8, // allocate two fds; vfile_open returns writable end
 } vfile_flag_t;
 
+#define VFILE_SYSCALL_DEFAULT (-2147483648) // -0x80000000
+
 // virtual file data
-typedef struct vfile {
+typedef struct vfile vfile_t;
+typedef isize(*vfile_onsyscall_t)(psysop_t,isize,isize,isize,isize,isize,vfile_t*);
+struct vfile {
   fd_t  fd;
-  u32   type; // VFILE_T_ constant
-  void* data; // data specific to type
-  // event handlers
-  // if set, on_close is called just before the file's fds are closed.
-  err_t(*on_close)(struct vfile*);
-  // if set, on_{read,write} OVERRIDES _psys_{read,write}.
-  isize(*on_read)(struct vfile*, void* data, usize size);
-  isize(*on_write)(struct vfile*, const void* data, usize size);
-} vfile_t;
+  u32   flags; // vfile_flag_t
+  void* data;  // data which depends on type
+
+  // optional syscall filter; return VFILE_SYSCALL_DEFAULT to skip filtering
+  vfile_onsyscall_t on_syscall;
+};
 
 // virtual file functions
-fd_t vfile_open(vfile_t** fp, vfile_type_t, vfile_flag_t);
+fd_t vfile_open(vfile_t** fp, vfile_flag_t);
 err_t vfile_close(vfile_t*);
 vfile_t* vfile_lookup(fd_t); // returns NULL if not found
 
+// syscall filtering.
+// looks up vfile for fd and if found, invokes its on_syscall handler.
+// returns VFILE_SYSCALL_DEFAULT if the caller should handle the syscall.
+inline static isize vfile_syscall(
+  fd_t fd, psysop_t op, isize a1, isize a2, isize a3, isize a4, isize a5)
+{
+  vfile_t* f = vfile_lookup(fd);
+  if (f && f->on_syscall)
+    return f->on_syscall(op, a1, a2, a3, a4, a5, f);
+  return VFILE_SYSCALL_DEFAULT;
+}
+
+// helper for easier argument forwarding
+#define VFILE_SYSCALL(fd, op, a1, a2, a3, a4, a5) \
+  vfile_syscall(fd,op,((isize)a1),((isize)a2),((isize)a3),((isize)a4),((isize)a5))
 
 // syscall implementations
 err_t _psys_pipe(psysop_t, fd_t* fdp, u32 flags);

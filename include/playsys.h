@@ -1,7 +1,4 @@
-// Copyright 2021 The PlaySys Authors
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// See http://www.apache.org/licenses/LICENSE-2.0
+// SPDX-License-Identifier: Apache-2.0
 
 #pragma once
 
@@ -23,6 +20,16 @@
   #define PSYS_EXTERN extern
 #endif
 
+#if defined(__has_builtin) && __has_builtin(__c11_atomic_thread_fence)
+  #define p_membarrier_r_acq() __c11_atomic_thread_fence(__ATOMIC_ACQUIRE)
+  #define p_membarrier_w_rel() __c11_atomic_thread_fence(__ATOMIC_RELEASE)
+#elif defined(__i386__) || defined(__x86_64__)
+  #define p_membarrier_r_acq()  __asm__ __volatile__("":::"memory")
+  #define p_membarrier_w_rel() __asm__ __volatile__("":::"memory")
+#else
+  #error
+#endif
+
 // types
 typedef signed char        i8;
 typedef unsigned char      u8;
@@ -37,11 +44,11 @@ typedef unsigned long      usize;
 typedef float              f32;
 typedef double             f64;
 
-typedef usize psysop_t;   // syscall operation code
-typedef u32   openflag_t; // flags to openat syscall
-typedef u32   mmapflag_t; // flags to mmap syscall
-typedef i32   err_t;      // error code (negative values)
-typedef i32   fd_t;       // file descriptor (positive values)
+typedef u32 psysop_t;   // syscall operation code
+typedef u32 openflag_t; // flags to openat syscall
+typedef u32 mmapflag_t; // flags to mmap syscall
+typedef i32 err_t;      // error code (negative values)
+typedef i32 fd_t;       // file descriptor (positive values)
 
 // constants
 #define P_FDSTDIN  ((fd_t)0)    // input stream

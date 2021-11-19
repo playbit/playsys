@@ -1,7 +1,4 @@
-// Copyright 2021 The PlaySys Authors
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// See http://www.apache.org/licenses/LICENSE-2.0
+// SPDX-License-Identifier: Apache-2.0
 
 #include "ringbuf.h"
 

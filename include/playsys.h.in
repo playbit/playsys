@@ -1,7 +1,4 @@
-// Copyright 2021 The PlaySys Authors
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// See http://www.apache.org/licenses/LICENSE-2.0
+// SPDX-License-Identifier: Apache-2.0
 
 #pragma once
 
@@ -21,6 +18,16 @@
   #define ${NS2}EXTERN extern "C"
 #else
   #define ${NS2}EXTERN extern
+#endif
+
+#if defined(__has_builtin) && __has_builtin(__c11_atomic_thread_fence)
+  #define ${ns}membarrier_r_acq() __c11_atomic_thread_fence(__ATOMIC_ACQUIRE)
+  #define ${ns}membarrier_w_rel() __c11_atomic_thread_fence(__ATOMIC_RELEASE)
+#elif defined(__i386__) || defined(__x86_64__)
+  #define ${ns}membarrier_r_acq()  __asm__ __volatile__("":::"memory")
+  #define ${ns}membarrier_w_rel() __asm__ __volatile__("":::"memory")
+#else
+  #error
 #endif
 
 // types

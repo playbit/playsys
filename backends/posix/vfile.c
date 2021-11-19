@@ -1,7 +1,4 @@
-// Copyright 2021 The PlaySys Authors
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// See http://www.apache.org/licenses/LICENSE-2.0
+// SPDX-License-Identifier: Apache-2.0
 
 #define SYS_DEBUG // define to enable debug logging
 #include "sys_impl.h"
@@ -60,6 +57,7 @@ static bool vfile_map_grow(vfile_map_t* m) {
 }
 
 
+// note: returned pointer is only valid until next call to a mutating vfile_map_ function
 static vfile_t* vfile_map_get(vfile_map_t* m, fd_t key) {
   // binary search
   assert(m->len*2 >= m->len); // overflow check
@@ -80,6 +78,7 @@ static vfile_t* vfile_map_get(vfile_map_t* m, fd_t key) {
 }
 
 
+// note: returned pointer is only valid until next call to a mutating vfile_map_ function
 static vfile_t* vfile_map_set(vfile_map_t* m, fd_t key) {
   assert(m->len*2 >= m->len); // overflow check
   u32 low = 0;
@@ -124,6 +123,7 @@ static vfile_t* vfile_map_set(vfile_map_t* m, fd_t key) {
 }
 
 
+// note: returned pointer is only valid until next call to a mutating vfile_map_ function
 static vfile_t* vfile_map_alloc(vfile_map_t* m) {
   if (m->len == m->cap) {
     if (!vfile_map_grow(m))
@@ -137,7 +137,8 @@ static vfile_t* vfile_map_alloc(vfile_map_t* m) {
   }
   m->keys[m->len] = key;
   m->vals[m->len].fd = key;
-  return &m->vals[m->len++];
+  vfile_t* f = &m->vals[m->len++];
+  return f;
 }
 
 
@@ -240,12 +241,12 @@ static void vfile_map_test() {
 #endif
 
 
-fd_t vfile_open(vfile_t** fp, vfile_type_t type, vfile_flag_t flags) {
+fd_t vfile_open(vfile_t** fp, vfile_flag_t flags) {
   vfile_t* f;
   fd_t fdv[2];
 
   // allocate a file descriptor
-  if (flags & VFILE_F_PIPE) {
+  if (flags & VFILE_PIPE) {
     // Note: we allocade a file descriptor from the OS to make sure we are
     // not "shadowing" another file descriptor.
     err_t e = _psys_pipe(0, fdv, 0); // fdv[0] = readable, fdv[1] writable
@@ -257,15 +258,15 @@ fd_t vfile_open(vfile_t** fp, vfile_type_t type, vfile_flag_t flags) {
   }
 
   if (!f) {
-    if (flags & VFILE_F_PIPE)
+    if (flags & VFILE_PIPE)
       _psys_close(0, fdv[0]);
     return p_err_nomem;
   }
 
-  f->type = type;
+  f->flags = flags;
   *fp = f;
 
-  if (flags & VFILE_F_PIPE)
+  if (flags & VFILE_PIPE)
     return (fd_t)fdv[1];
   return f->fd;
 }
@@ -277,6 +278,8 @@ vfile_t* vfile_lookup(fd_t fd) {
 
 
 err_t vfile_close(vfile_t* f) {
-  err_t ret = f->on_close ? f->on_close(f) : 0;
+  err_t ret = 0;
+  if (f->on_syscall)
+    ret = MAX(ret, (err_t)f->on_syscall(p_sysop_close, 0, 0, 0, 0, 0, f));
   return vfile_map_del(&g_vfile_map, f->fd) ? ret : p_err_badfd;
 }

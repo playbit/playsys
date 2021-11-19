@@ -1,7 +1,4 @@
-// Copyright 2021 The PlaySys Authors
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// See http://www.apache.org/licenses/LICENSE-2.0
+// SPDX-License-Identifier: Apache-2.0
 
 export type i8    = number
 export type u8    = number
@@ -16,11 +13,11 @@ export type usize = number
 export type f32   = number
 export type f64   = number
 
-export type psysop_t   = usize // syscall operation code
-export type openflag_t = u32   // flags to openat syscall
-export type mmapflag_t = u32   // flags to mmap syscall
-export type err_t      = i32   // error code (negative values)
-export type fd_t       = i32   // file descriptor (positive values)
+export type psysop_t   = u32 // syscall operation code
+export type openflag_t = u32 // flags to openat syscall
+export type mmapflag_t = u32 // flags to mmap syscall
+export type err_t      = i32 // error code (negative values)
+export type fd_t       = i32 // file descriptor (positive values)
 
 // constants
 export const FDSTDIN  :fd_t =    0 // input stream

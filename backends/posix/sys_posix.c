@@ -1,8 +1,4 @@
-// Copyright 2021 The PlaySys Authors
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// See http://www.apache.org/licenses/LICENSE-2.0
-
+// SPDX-License-Identifier: Apache-2.0
 // POSIX backend using host platform libc
 
 #define SYS_DEBUG // define to enable debug logging
@@ -18,6 +14,48 @@
 #include <assert.h>
 
 #define SYS_SPECIAL_FS_PREFIX "/sys"
+
+#define _CONCAT_X(a,b) a##b
+#define _CONCAT(a,b) _CONCAT_X(a,b)
+
+
+// vfile syscall helper macros
+#define FWD_VFILE_SYSCALL(...) _VFILE_SYSCALL_DISP(_FWD_VFILE_SYSCALL,__VA_ARGS__)
+#define _FWD_VFILE_SYSCALL0(fd, op) { \
+  isize n = vfile_syscall(fd,op,0,0,0,0,0); \
+  if (n != VFILE_SYSCALL_DEFAULT) \
+    return n; \
+}
+#define _FWD_VFILE_SYSCALL1(fd, op, a) { \
+  isize n = vfile_syscall(fd,op,((isize)a),0,0,0,0); \
+  if (n != VFILE_SYSCALL_DEFAULT) \
+    return n; \
+}
+#define _FWD_VFILE_SYSCALL2(fd, op, a, b) { \
+  isize n = vfile_syscall(fd,op,((isize)a),((isize)b),0,0,0); \
+  if (n != VFILE_SYSCALL_DEFAULT) \
+    return n; \
+}
+#define _FWD_VFILE_SYSCALL3(fd, op, a, b, c) { \
+  isize n = vfile_syscall(fd,op,((isize)a),((isize)b),((isize)c),0,0); \
+  if (n != VFILE_SYSCALL_DEFAULT) \
+    return n; \
+}
+#define _FWD_VFILE_SYSCALL4(fd, op, a, b, c, d) { \
+  isize n = vfile_syscall(fd,op,((isize)a),((isize)b),((isize)c),((isize)d),0); \
+  if (n != VFILE_SYSCALL_DEFAULT) \
+    return n; \
+}
+#define _FWD_VFILE_SYSCALL5(fd, op, a, b, c, d, e) { \
+  isize n = vfile_syscall(fd,op,((isize)a),((isize)b),((isize)c),((isize)d),((isize)e)); \
+  if (n != VFILE_SYSCALL_DEFAULT) \
+    return n; \
+}
+
+#define _VFILE_SYSCALL_DISP(a,...) _CONCAT(a,_VFILE_SYSCALL_NARGS(__VA_ARGS__))(__VA_ARGS__)
+#define _VFILE_SYSCALL_NARGS_X(a,b,c,d,e,f,g,h,n,...) n
+#define _VFILE_SYSCALL_NARGS(...) _VFILE_SYSCALL_NARGS_X(__VA_ARGS__,6,5,4,3,2,1,)
+
 
 extern int errno;
 
@@ -142,12 +180,17 @@ static err_t vfile1_close(vfile1_t* f) {
 }
 
 
+
 // ---------------------------------------------------
 // sys_syscall op implementations
 
 
-static err_t _psys_mmap(void** addr, usize length, mmapflag_t flag, fd_t fd, usize offs) {
-  return p_err_nomem;
+static err_t _psys_mmap(
+  psysop_t op, void** addr, usize length, mmapflag_t flag, fd_t fd, usize offs)
+{
+  if (fd > -1)
+    FWD_VFILE_SYSCALL(fd, op, addr, length, flag, fd, offs)
+  return p_err_badfd;
 }
 
 
@@ -359,17 +402,20 @@ static isize _psys_read(psysop_t op, fd_t fd, void* data, usize size) {
   if (f && f->on_read)
     return f->on_read(f, data, size);
 
+  FWD_VFILE_SYSCALL(fd, op, fd, data, size)
+
   isize n = read((int)fd, data, size);
   if (n < 0)
     return err_from_errno(errno);
   return (isize)n;
 }
 
-
 static isize _psys_write(psysop_t op, fd_t fd, const void* data, usize size) {
   vfile1_t* f = vfile1_lookup(fd);
   if (f && f->on_write)
     return f->on_write(f, data, size);
+
+  FWD_VFILE_SYSCALL(fd, op, fd, data, size)
 
   isize n = write((int)fd, data, size);
   if (n < 0)
