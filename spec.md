@@ -30,7 +30,7 @@ cstr   | array of bytes with a 0 terminator byte (UTF-8)
 
 name      | type     | purpose
 ----------|----------|---------------------------------------------------------
-psysop    | usize    | syscall operation code
+psysop    | u32      | syscall operation code
 openflag  | u32      | flags to openat syscall
 mmapflag  | u32      | flags to mmap syscall
 err       | i32      | error code (negative values)
@@ -124,6 +124,9 @@ name                          | psysop | arguments
 [ioring_enter](#ioring_enter)       | 426 | ring fd, to_submit u32, min_complete u32, flags u32
 [ioring_register](#ioring_register) | 427 | ring fd, opcode u32, arg ptr, nr_args u32
 
+Wherever possible, syscalls should match
+[Linux](https://github.com/torvalds/linux/blob/v5.15/arch/ia64/kernel/syscalls/syscall.tbl)
+to make the implementation on Linux simpler.
 
 #### mmap
 
@@ -164,7 +167,9 @@ Create an I/O ring context
       entries u32             Queue size
       params  *ioring_params
 
-Adapted from [Linux's io_uring](https://github.com/torvalds/linux/blob/v5.15/include/uapi/linux/io_uring.h)
+Adapted from
+[Linux's io_uring](https://github.com/torvalds/linux/blob/v5.15/include/uapi/linux/io_uring.h)
+([kernel impl](https://github.com/torvalds/linux/blob/v5.15/fs/io_uring.c))
 
 
 #### gui_mksurf
