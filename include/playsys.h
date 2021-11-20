@@ -2,35 +2,24 @@
 
 #pragma once
 
+// code attributes
 #if __has_attribute(warn_unused_result)
   #define PSYS_WARN_UNUSED __attribute__((warn_unused_result))
 #else
   #define PSYS_WARN_UNUSED
 #endif
-
 #if __has_attribute(unused)
   #define PSYS_UNUSED __attribute__((unused))
 #else
   #define PSYS_UNUSED
 #endif
-
 #ifdef __cplusplus
   #define PSYS_EXTERN extern "C"
 #else
   #define PSYS_EXTERN extern
 #endif
 
-#if defined(__has_builtin) && __has_builtin(__c11_atomic_thread_fence)
-  #define p_membarrier_r_acq() __c11_atomic_thread_fence(__ATOMIC_ACQUIRE)
-  #define p_membarrier_w_rel() __c11_atomic_thread_fence(__ATOMIC_RELEASE)
-#elif defined(__i386__) || defined(__x86_64__)
-  #define p_membarrier_r_acq()  __asm__ __volatile__("":::"memory")
-  #define p_membarrier_w_rel() __asm__ __volatile__("":::"memory")
-#else
-  #error
-#endif
-
-// types
+// primitive types
 typedef signed char        i8;
 typedef unsigned char      u8;
 typedef signed short       i16;
@@ -44,6 +33,7 @@ typedef unsigned long      usize;
 typedef float              f32;
 typedef double             f64;
 
+// playsys types
 typedef u32 psysop_t;   // syscall operation code
 typedef u32 openflag_t; // flags to openat syscall
 typedef u32 mmapflag_t; // flags to mmap syscall
@@ -71,6 +61,8 @@ enum p_err {
   p_err_end           = -10, // end of resource
   p_err_access        = -11, // permission denied
   p_err_nomem         = -12, // cannot allocate memory
+  p_err_mfault        = -13, // bad memory address
+  p_err_overflow      = -14, // value too large for defined data type
 };
 
 // open flags (possible bits of type openflag_t)
@@ -252,7 +244,8 @@ typedef struct _p_ioring_cqoffsets {
   u64 resv2;
 } p_ioring_cqoffsets_t;
 
-// ioring configuration, passed to ioring_setup. Updated with info on success.
+// ioring configuration, passed to ioring_setup.
+// On success, it is updated with offsets into the shared memory region.
 typedef struct _p_ioring_params {
   u32 sq_entries;
   u32 cq_entries;
@@ -432,8 +425,35 @@ inline static const char* p_err_str(err_t e) {
   case p_err_end:           return "end";
   case p_err_access:        return "access";
   case p_err_nomem:         return "nomem";
+  case p_err_mfault:        return "mfault";
+  case p_err_overflow:      return "overflow";
   }
   return "?";
 }
+
+// SMP memory operations
+#if defined(__wasm__)
+  #define p_mbarrier()   ((void)0)
+  #define p_mbarrier_r() ((void)0)
+  #define p_mbarrier_w() ((void)0)
+#elif defined(__has_builtin) && __has_builtin(__c11_atomic_thread_fence)
+  #define p_mbarrier()   __c11_atomic_thread_fence(__ATOMIC_ACQ_REL)
+  #define p_mbarrier_r() __c11_atomic_thread_fence(__ATOMIC_ACQUIRE)
+  #define p_mbarrier_w() __c11_atomic_thread_fence(__ATOMIC_RELEASE)
+#elif defined(__i386__)
+  #define p_mbarrier()   __asm__ volatile("lock; addl $0,0(%%esp)" ::: "memory")
+  #define p_mbarrier_r() __asm__ volatile("lock; addl $0,0(%%esp)" ::: "memory")
+  #define p_mbarrier_w() __asm__ volatile("lock; addl $0,0(%%esp)" ::: "memory")
+#elif defined(__x86_64__)
+  #define p_mbarrier()   __asm__ volatile("mfence" ::: "memory")
+  #define p_mbarrier_r() __asm__ volatile("lfence" ::: "memory")
+  #define p_mbarrier_w() __asm__ volatile("sfence" ::: "memory")
+#elif defined(__arm__) || defined(__arm64__) || defined(__aarch64__)
+  #define p_mbarrier()   __asm__ volatile("dmb ish" ::: "memory")
+  #define p_mbarrier_r() __asm__ volatile("dmb ishst" ::: "memory")
+  #define p_mbarrier_w() __asm__ volatile("dmb ishld" ::: "memory")
+#else
+  #error
+#endif
 
 // Note: this file is generated from spec.md; edit with caution

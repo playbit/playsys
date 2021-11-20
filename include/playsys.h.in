@@ -2,35 +2,24 @@
 
 #pragma once
 
+// code attributes
 #if __has_attribute(warn_unused_result)
   #define ${NS2}WARN_UNUSED __attribute__((warn_unused_result))
 #else
   #define ${NS2}WARN_UNUSED
 #endif
-
 #if __has_attribute(unused)
   #define ${NS2}UNUSED __attribute__((unused))
 #else
   #define ${NS2}UNUSED
 #endif
-
 #ifdef __cplusplus
   #define ${NS2}EXTERN extern "C"
 #else
   #define ${NS2}EXTERN extern
 #endif
 
-#if defined(__has_builtin) && __has_builtin(__c11_atomic_thread_fence)
-  #define ${ns}membarrier_r_acq() __c11_atomic_thread_fence(__ATOMIC_ACQUIRE)
-  #define ${ns}membarrier_w_rel() __c11_atomic_thread_fence(__ATOMIC_RELEASE)
-#elif defined(__i386__) || defined(__x86_64__)
-  #define ${ns}membarrier_r_acq()  __asm__ __volatile__("":::"memory")
-  #define ${ns}membarrier_w_rel() __asm__ __volatile__("":::"memory")
-#else
-  #error
-#endif
-
-// types
+// primitive types
 typedef signed char        i8;
 typedef unsigned char      u8;
 typedef signed short       i16;
@@ -44,29 +33,30 @@ typedef unsigned long      usize;
 typedef float              f32;
 typedef double             f64;
 
-$TYPES
+// playsys types
+${TYPES}
 
 // constants
-$CONSTANTS
+${CONSTANTS}
 
 // errors (possible values of type ${err})
 enum ${ns}err {
-$ERR_ENUM
+${ERR_ENUM}
 };
 
 // open flags (possible bits of type ${openflag})
 enum ${ns}openflag {
-$OPENFLAG_ENUM
+${OPENFLAG_ENUM}
 };
 
 // mmap flags (possible bits of type ${mmapflag})
 enum ${ns}mmapflag {
-$MMAPFLAG_ENUM
+${MMAPFLAG_ENUM}
 };
 
 // syscall operations (possible values of type ${psysop})
 enum ${ns}sysop {
-$SYSOP_ENUM
+${SYSOP_ENUM}
 };
 
 // ${ns}syscall calls the host system
@@ -199,7 +189,8 @@ typedef struct _${ns}ioring_cqoffsets {
   u64 resv2;
 } ${ns}ioring_cqoffsets_t;
 
-// ioring configuration, passed to ioring_setup. Updated with info on success.
+// ioring configuration, passed to ioring_setup.
+// On success, it is updated with offsets into the shared memory region.
 typedef struct _${ns}ioring_params {
   u32 sq_entries;
   u32 cq_entries;
@@ -270,7 +261,7 @@ typedef struct _${ns}ioring_cqe {
 
 // --- syscall interface functions ---
 
-$SYSCALL_FN_PROTOTYPES
+${SYSCALL_FN_PROTOTYPES}
 
 #define _${ns}syscall0 \
   ((isize(*)(${psysop}))${ns}syscall)
@@ -285,14 +276,39 @@ $SYSCALL_FN_PROTOTYPES
 #define _${ns}syscall5 \
   ((isize(*)(${psysop},isize,isize,isize,isize,isize))${ns}syscall)
 
-$SYSCALL_FN_IMPLS
+${SYSCALL_FN_IMPLS}
 
 // p_err_str returns the symbolic name of an error as a string
 inline static const char* ${ns}err_str(err_t e) {
   switch ((enum ${ns}err)e) {
-$ERR_SWITCH
+${ERR_SWITCH}
   }
   return "?";
 }
+
+// SMP memory operations
+#if defined(__wasm__)
+  #define ${ns}mbarrier()   ((void)0)
+  #define ${ns}mbarrier_r() ((void)0)
+  #define ${ns}mbarrier_w() ((void)0)
+#elif defined(__has_builtin) && __has_builtin(__c11_atomic_thread_fence)
+  #define ${ns}mbarrier()   __c11_atomic_thread_fence(__ATOMIC_ACQ_REL)
+  #define ${ns}mbarrier_r() __c11_atomic_thread_fence(__ATOMIC_ACQUIRE)
+  #define ${ns}mbarrier_w() __c11_atomic_thread_fence(__ATOMIC_RELEASE)
+#elif defined(__i386__)
+  #define ${ns}mbarrier()   __asm__ volatile("lock; addl $0,0(%%esp)" ::: "memory")
+  #define ${ns}mbarrier_r() __asm__ volatile("lock; addl $0,0(%%esp)" ::: "memory")
+  #define ${ns}mbarrier_w() __asm__ volatile("lock; addl $0,0(%%esp)" ::: "memory")
+#elif defined(__x86_64__)
+  #define ${ns}mbarrier()   __asm__ volatile("mfence" ::: "memory")
+  #define ${ns}mbarrier_r() __asm__ volatile("lfence" ::: "memory")
+  #define ${ns}mbarrier_w() __asm__ volatile("sfence" ::: "memory")
+#elif defined(__arm__) || defined(__arm64__) || defined(__aarch64__)
+  #define ${ns}mbarrier()   __asm__ volatile("dmb ish" ::: "memory")
+  #define ${ns}mbarrier_r() __asm__ volatile("dmb ishst" ::: "memory")
+  #define ${ns}mbarrier_w() __asm__ volatile("dmb ishld" ::: "memory")
+#else
+  #error
+#endif
 
 // Note: this file is generated from spec.md; edit with caution

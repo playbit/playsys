@@ -70,6 +70,8 @@ exists         | already exists
 end            | end of resource
 access         | permission denied
 nomem          | cannot allocate memory
+mfault         | bad memory address
+overflow       | value too large for defined data type
 
 
 ## Syscall

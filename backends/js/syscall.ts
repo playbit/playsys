@@ -40,6 +40,8 @@ export enum err {
   end           = -10, // end of resource
   access        = -11, // permission denied
   nomem         = -12, // cannot allocate memory
+  mfault        = -13, // bad memory address
+  overflow      = -14, // value too large for defined data type
 }
 
 // open flags

@@ -13,24 +13,24 @@ export type usize = number
 export type f32   = number
 export type f64   = number
 
-$TYPES
+${TYPES}
 
 // constants
-$CONSTANTS
+${CONSTANTS}
 
 // errors
 export enum err {
-$ERR_ENUM
+${ERR_ENUM}
 }
 
 // open flags
 export enum oflag {
-$OFLAG_ENUM
+${OFLAG_ENUM}
 }
 
 // syscall operations
 export enum sysop {
-$SYSOP_ENUM
+${SYSOP_ENUM}
 }
 
 // Note: this file is generated from spec.md; edit with caution
