@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 LLVM_PATH=$("$(dirname "$0")"/../../etc/find-llvm.sh)

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 if command -v wasm-ld >/dev/null; then
   echo "$(dirname $(dirname "$(command -v wasm-ld)"))"
