@@ -19,8 +19,6 @@ f64    | 64 bit IEEE 754 floating-point number
 isize  | arch-address sized signed integer
 usize  | arch-address sized unsigned integer
 ptr    | memory address (a pointer; `void*` in C)
-ptrptr | memory address to ptr (`void**` in C)
-fdptr  | memory address to fd (`fd_t*` in C)
 cstr   | array of bytes with a 0 terminator byte (UTF-8)
 
 
@@ -28,13 +26,14 @@ cstr   | array of bytes with a 0 terminator byte (UTF-8)
 
 [](# ":types")
 
-name      | type     | purpose
-----------|----------|---------------------------------------------------------
-psysop    | u32      | syscall operation code
-openflag  | u32      | flags to openat syscall
-mmapflag  | u32      | flags to mmap syscall
-err       | i32      | error code (negative values)
-fd        | i32      | file descriptor (positive values)
+name       | type | purpose
+-----------|------|---------------------------------------------------------
+err        | i32  | error code (negative values)
+fd         | i32  | file descriptor (positive values)
+psysop     | u32  | syscall operation code
+openflag   | u32  | flags to openat syscall
+mmapflag   | u32  | flags to mmap syscall
+gpudevflag | u32  | flags to gpudev syscall
 
 
 ### Symbolic constants
@@ -105,23 +104,23 @@ wasm         | WASM (args on stack)
 
 [](# ":sysops")
 
-name                          | psysop | arguments
-------------------------------|-------:|--------------------------------------------
-[openat](#openat)             |    257 | base fd, path cstr, flags openflag, mode usize -> fd
-[close](#close)               |      3 | fd fd -> err
-[read](#read)                 |      0 | fd fd, data mutptr, nbyte usize
-[write](#write)               |      1 | fd fd, data ptr, nbyte usize
-[seek](#seek)                 |      8 | _TODO_
-[statat](#statat)             |    262 | _TODO_ (newfstatat in linux, alt: statx 332) -> err
-[removeat](#removeat)         |    263 | base fd, path cstr, flags usize -> err
-[renameat](#renameat)         |    264 | oldbase fd, oldpath cstr, newbase fd, newpath cstr -> err
-[sleep](#sleep)               |    230 | seconds usize, nanoseconds usize
-[exit](#exit)                 |     60 | status_code i32 -> err
-[mmap](#mmap)                 |      9 | addr ptrptr, length usize, flag mmapflag, fd fd, offs usize -> err
-[pipe](#pipe)                 |    293 | fdv fdptr, flags u32 -> err
-[test](#test)                 |  10000 | op psysop -> err
-[wgpu_opendev](#wgpu_opendev) |  10001 | flags usize -> fd
-[gui_mksurf](#gui_mksurf)     |  10002 | width u32, height u32, device fd, flags usize -> fd
+name                      | psysop | arguments
+--------------------------|-------:|--------------------------------------------
+[openat](#openat)         |    257 | base fd, path cstr, flags openflag, mode usize -> fd
+[close](#close)           |      3 | fd fd -> err
+[read](#read)             |      0 | fd fd, data mutptr, nbyte usize
+[write](#write)           |      1 | fd fd, data ptr, nbyte usize
+[seek](#seek)             |      8 | _TODO_
+[statat](#statat)         |    262 | _TODO_ (newfstatat in linux, alt: statx 332) -> err
+[removeat](#removeat)     |    263 | base fd, path cstr, flags u32 -> err
+[renameat](#renameat)     |    264 | oldbase fd, oldpath cstr, newbase fd, newpath cstr -> err
+[sleep](#sleep)           |    230 | seconds usize, nanoseconds usize
+[exit](#exit)             |     60 | status_code i32 -> err
+[mmap](#mmap)             |      9 | addr \*ptr, length usize, flag mmapflag, fd fd, offs usize -> err
+[pipe](#pipe)             |    293 | fdv \*fd, flags u32 -> err
+[test](#test)             |  10000 | op psysop -> err
+[gpudev](#gpudev)         |  10001 | flags gpudevflag -> fd
+[gui_mksurf](#gui_mksurf) |  10002 | width u32, height u32, device fd, flags u32 -> fd
 [ioring_setup](#ioring_setup)       | 425 | entries u32, params \*ioring_params -> fd
 [ioring_enter](#ioring_enter)       | 426 | ring fd, to_submit u32, min_complete u32, flags u32
 [ioring_register](#ioring_register) | 427 | ring fd, opcode u32, arg ptr, nr_args u32
@@ -172,6 +171,25 @@ Adapted from
 ([kernel impl](https://github.com/torvalds/linux/blob/v5.15/fs/io_uring.c))
 
 
+
+#### gpudev
+
+Allocate handle to a WGPU device
+
+    gpudev → fd | err
+      flags gpudevflag
+
+##### gpudev flags
+
+[](# ":gpudev_flags")
+
+name       |  value | effect
+-----------|-------:|--------------------------------------------------------------
+powhigh    |    0x1 | Request high-performance adapter
+powlow     |    0x2 | Request low-energy adapter
+software   |    0x4 | Force software driver to be used
+
+
 #### gui_mksurf
 
 Creates a graphics surface
@@ -180,7 +198,7 @@ Creates a graphics surface
       width  u32   Width in dp units. 0 to let the host decide.
       height u32   Height in dp units. 0 to let the host decide.
       device fd    GPU device. -1 to let the host decide.
-      flags  usize
+      flags  u32   (Currently no flags. Pass 0)
 
 
 #### test
@@ -236,6 +254,8 @@ excl   |    32 | fail if file exists when `create` and `excl` are set
 
 _[TODO]_
 See [\<sys/stat.h>](https://pubs.opengroup.org/onlinepubs/007904875/basedefs/sys/stat.h.html)
+
+
 
 
 ##### Syscall operations under consideration
@@ -311,7 +331,7 @@ Example
 
 int main(int argc, const char** argv) {
   // select a GPU device
-  fd_t wgpu_dev = open("/sys/wgpu/dev/gpu0", p_open_ronly, 0);
+  fd_t gpudev = open("/sys/wgpu/dev/gpu0", p_open_ronly, 0);
 
   // create a graphics surface (e.g. a window or HTMLCanvas object)
   fd_t wgpu_surf = open("/sys/wgpu/surface", p_open_rw, 0);
@@ -322,7 +342,7 @@ int main(int argc, const char** argv) {
 
   // configure a WebGPU API interface
   wgpu_ctx_t* ctx = wgpu_ctx_create(ctx_mem);
-  WGPUDevice device = wgpu_ctx_set_device(ctx, wgpu_dev);
+  WGPUDevice device = wgpu_ctx_set_device(ctx, gpudev);
   WGPUSurface surface = wgpu_ctx_set_surface(ctx, wgpu_surf);
 
   // From here on we can use the standard WebGPU API <webgpu.h>
@@ -347,7 +367,7 @@ int main(int argc, const char** argv) {
 
   wgpu_ctx_dispose(ctx);
   close(wgpu_surf); // close the graphic surface
-  close(wgpu_dev);  // release GPU device handle
+  close(gpudev);  // release GPU device handle
 
   return 0;
 }

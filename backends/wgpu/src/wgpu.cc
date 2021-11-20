@@ -41,30 +41,31 @@ struct p_wgpu_res_t {
 };
 
 
-static DawnProcTable               gNativeProcs;
-static dawn_native::Instance       gDawnNative;
-static std::map<fd_t,p_wgpu_res_t> gOpenResources;
+static DawnProcTable         gNativeProcs;
+static dawn_native::Instance gDawnNative;
 
 
 // helper functions defined at end of file
-static void logAvailableAdapters();
+#ifdef DEBUG
+  static void logAvailableAdapters();
+#endif
 static const char* backend_type_name(wgpu::BackendType t);
 static const char* adapter_type_name(wgpu::AdapterType t);
 
 
-static p_wgpu_dev_t* lookup_dev(fd_t user_fd) {
-  auto it = gOpenResources.find(user_fd);
-  if (it == gOpenResources.end() || it->second.type != WGPU_RES_DEVICE)
+static p_wgpu_dev_t* lookup_dev(fd_t fd) {
+  vfile_t* f = vfile_lookup(fd);
+  if (!f || (f->flags & VFILE_T_GPUDEV) == 0)
     return nullptr;
-  return it->second.dev;
+  return (p_wgpu_dev_t*)f->data;
 }
 
 
-static p_gui_surf_t* lookup_surf(fd_t user_fd) {
-  auto it = gOpenResources.find(user_fd);
-  if (it == gOpenResources.end() || it->second.type != WGPU_RES_SURFACE)
+static p_gui_surf_t* lookup_surf(fd_t fd) {
+  vfile_t* f = vfile_lookup(fd);
+  if (!f || (f->flags & VFILE_T_GUI_SURF) == 0)
     return nullptr;
-  return it->second.surf;
+  return (p_gui_surf_t*)f->data;
 }
 
 
@@ -88,17 +89,19 @@ static void p_wgpu_init() {
     gDawnNative.SetBackendValidationLevel(dawn_native::BackendValidationLevel::Disabled);
   #endif
 
-  logAvailableAdapters();
+  #ifdef DEBUG
+    logAvailableAdapters();
+  #endif
 }
 
 
-static bool select_adapter(p_wgpu_dev_t* c, p_wgpu_dev_flag_t fl) {
+static bool select_adapter(p_wgpu_dev_t* c, gpudevflag_t fl) {
   // search available adapters for a good match, in the following priority order:
   const std::vector<wgpu::AdapterType> typePriority = (
-    (fl & p_wgpu_dev_fl_software) ? std::vector<wgpu::AdapterType>{
+    (fl & p_gpudev_software) ? std::vector<wgpu::AdapterType>{
       wgpu::AdapterType::CPU,
     }
-    : (fl & p_wgpu_dev_fl_powlow) ? std::vector<wgpu::AdapterType>{
+    : (fl & p_gpudev_powlow) ? std::vector<wgpu::AdapterType>{
       wgpu::AdapterType::IntegratedGPU,
       wgpu::AdapterType::DiscreteGPU,
       wgpu::AdapterType::CPU,
@@ -133,9 +136,8 @@ static bool select_adapter(p_wgpu_dev_t* c, p_wgpu_dev_flag_t fl) {
 }
 
 
-static err_t dev_select_device(p_wgpu_dev_t* dev, int adapter_id, p_wgpu_dev_flag_t fl) {
-  p_wgpu_dev_flag_t devfl = p_wgpu_dev_fl_none;
-  if (!select_adapter(dev, devfl))
+static err_t dev_select_device(p_wgpu_dev_t* dev, int adapter_id, gpudevflag_t fl) {
+  if (!select_adapter(dev, fl))
     return p_err_not_supported;
   WGPUDevice device = dev->adapter.CreateDevice();
   if (!device) {
@@ -151,19 +153,16 @@ static err_t dev_select_device(p_wgpu_dev_t* dev, int adapter_id, p_wgpu_dev_fla
 }
 
 
-err_t p_wgpu_opendev(
-  p_wgpu_dev_t** devp, fd_t fd, fd_t fd_user, int adapter_id, p_wgpu_dev_flag_t fl)
-{
+err_t p_wgpu_dev_open(p_wgpu_dev_t** devp, fd_t wfd, int adapter_id, gpudevflag_t fl) {
   p_wgpu_init();
   p_wgpu_dev_t* dev = new p_wgpu_dev_t();
-  dev->fd = fd;
+  dev->fd = wfd;
   err_t e = dev_select_device(dev, adapter_id, fl);
   if (e < 0) {
     delete dev;
     return e;
   }
-  dlog("p_wgpu_dev_open %p fd_user=%d", dev, fd_user);
-  gOpenResources.emplace(fd_user, dev);
+  dlog("p_wgpu_dev_open %p", dev);
   *devp = dev;
   return 0;
 }
@@ -172,7 +171,6 @@ err_t p_wgpu_opendev(
 err_t p_wgpu_dev_close(p_wgpu_dev_t* dev) {
   if (dev->device)
     dev->device.Release();
-  gOpenResources.erase(dev->fd);
   delete dev;
   return 0;
 }
@@ -186,21 +184,23 @@ err_t p_gui_surf_close(p_gui_surf_t* surf) {
     surf->window = NULL;
   }
   free(surf->rbuf.p);
-  gOpenResources.erase(surf->fd);
   delete surf;
   return 0;
 }
 
 
-err_t p_gui_surf_open(
-  p_gui_surf_t** surfp, fd_t fd, fd_t fd_user, p_gui_surf_descr_t* descr)
-{
+isize p_gui_surf_write(p_gui_surf_t* surf, const char* data, usize size) {
+  // TODO: surf->wbuf
+  return p_err_not_supported;
+}
+
+
+err_t p_gui_surf_open(p_gui_surf_t** surfp, p_gui_surf_descr_t* descr) {
   p_wgpu_init();
 
   // create surface struct
   p_gui_surf_t* surf = new p_gui_surf_t();
   memset(surf, 0, sizeof(p_gui_surf_t));
-  surf->fd = fd;
   u32 rbufcap = 4096;
   p_ringbuf_init(&surf->rbuf, malloc(rbufcap), rbufcap);
   if (surf->rbuf.p == NULL) { // malloc failed
@@ -239,7 +239,7 @@ err_t p_gui_surf_open(
     // auto-select device
     p_wgpu_dev_t dev;
     int adapter_id = -1;
-    err_t e = dev_select_device(&dev, adapter_id, p_wgpu_dev_fl_none);
+    err_t e = dev_select_device(&dev, adapter_id, 0);
     if (e < 0) {
       delete surf;
       return e;
@@ -247,7 +247,6 @@ err_t p_gui_surf_open(
     surf->device = std::move(dev.device);
   }
 
-  gOpenResources.emplace(fd_user, surf);
   *surfp = surf;
   return 0;
 }
@@ -296,16 +295,18 @@ static const char* adapter_type_name(wgpu::AdapterType t) {
   return "?";
 }
 
-// logAvailableAdapters prints a list of all adapters and their properties
-static void logAvailableAdapters() {
-  fprintf(stderr, "Available GPU adapters:\n");
-  for (auto&& a : gDawnNative.GetAdapters()) {
-    wgpu::AdapterProperties p;
-    a.GetProperties(&p);
-    fprintf(stderr, "  %s (%s)\n"
-      "    deviceID=%u, vendorID=0x%x, BackendType::%s, AdapterType::%s\n",
-      p.name, p.driverDescription,
-      p.deviceID, p.vendorID,
-      backend_type_name(p.backendType), adapter_type_name(p.adapterType));
+#ifdef DEBUG
+  // logAvailableAdapters prints a list of all adapters and their properties
+  static void logAvailableAdapters() {
+    fprintf(stderr, "Available GPU adapters:\n");
+    for (auto&& a : gDawnNative.GetAdapters()) {
+      wgpu::AdapterProperties p;
+      a.GetProperties(&p);
+      fprintf(stderr, "  %s (%s)\n"
+        "    deviceID=%u, vendorID=0x%x, BackendType::%s, AdapterType::%s\n",
+        p.name, p.driverDescription,
+        p.deviceID, p.vendorID,
+        backend_type_name(p.backendType), adapter_type_name(p.adapterType));
+    }
   }
-}
+#endif

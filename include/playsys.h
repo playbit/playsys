@@ -34,11 +34,12 @@ typedef float              f32;
 typedef double             f64;
 
 // playsys types
-typedef u32 psysop_t;   // syscall operation code
-typedef u32 openflag_t; // flags to openat syscall
-typedef u32 mmapflag_t; // flags to mmap syscall
-typedef i32 err_t;      // error code (negative values)
-typedef i32 fd_t;       // file descriptor (positive values)
+typedef i32 err_t;        // error code (negative values)
+typedef i32 fd_t;         // file descriptor (positive values)
+typedef u32 psysop_t;     // syscall operation code
+typedef u32 openflag_t;   // flags to openat syscall
+typedef u32 mmapflag_t;   // flags to mmap syscall
+typedef u32 gpudevflag_t; // flags to gpudev syscall
 
 // constants
 #define P_FDSTDIN  ((fd_t)0)    // input stream
@@ -90,6 +91,13 @@ enum p_mmapflag {
   p_mmap_nonblock   = 0x200, // use with populate to not block on prefault
 };
 
+// gpudev flags (possible bits of type gpudevflag_t)
+enum p_gpudevflag {
+  p_gpudev_powhigh  = 0x1, // Request high-performance adapter
+  p_gpudev_powlow   = 0x2, // Request low-energy adapter
+  p_gpudev_software = 0x4, // Force software driver to be used
+};
+
 // syscall operations (possible values of type psysop_t)
 enum p_sysop {
   p_sysop_openat          = 257, 
@@ -105,7 +113,7 @@ enum p_sysop {
   p_sysop_mmap            = 9, 
   p_sysop_pipe            = 293, 
   p_sysop_test            = 10000, 
-  p_sysop_wgpu_opendev    = 10001, 
+  p_sysop_gpudev          = 10001, 
   p_sysop_gui_mksurf      = 10002, 
   p_sysop_ioring_setup    = 425, 
   p_sysop_ioring_enter    = 426, 
@@ -318,7 +326,7 @@ static fd_t p_syscall_openat(fd_t base, const char* path, openflag_t flags, usiz
 static err_t p_syscall_close(fd_t fd);
 static isize p_syscall_read(fd_t fd, void* data, usize nbyte);
 static isize p_syscall_write(fd_t fd, const void* data, usize nbyte);
-static err_t p_syscall_removeat(fd_t base, const char* path, usize flags);
+static err_t p_syscall_removeat(fd_t base, const char* path, u32 flags);
 static err_t p_syscall_renameat(fd_t oldbase, const char* oldpath, fd_t newbase,
   const char* newpath);
 static isize p_syscall_sleep(usize seconds, usize nanoseconds);
@@ -327,8 +335,8 @@ static err_t p_syscall_mmap(void** addr, usize length, mmapflag_t flag, fd_t fd,
   usize offs);
 static err_t p_syscall_pipe(fd_t* fdv, u32 flags);
 static err_t p_syscall_test(psysop_t op);
-static fd_t p_syscall_wgpu_opendev(usize flags);
-static fd_t p_syscall_gui_mksurf(u32 width, u32 height, fd_t device, usize flags);
+static fd_t p_syscall_gpudev(gpudevflag_t flags);
+static fd_t p_syscall_gui_mksurf(u32 width, u32 height, fd_t device, u32 flags);
 static fd_t p_syscall_ioring_setup(u32 entries, p_ioring_params_t* params);
 static isize p_syscall_ioring_enter(fd_t ring, u32 to_submit, u32 min_complete, u32 flags);
 static isize p_syscall_ioring_register(fd_t ring, u32 opcode, const void* arg,
@@ -361,7 +369,7 @@ inline static isize p_syscall_read(fd_t fd, void* data, usize nbyte) {
 inline static isize p_syscall_write(fd_t fd, const void* data, usize nbyte) {
   return _p_syscall3(p_sysop_write, (isize)fd, (isize)data, (isize)nbyte);
 }
-inline static err_t p_syscall_removeat(fd_t base, const char* path, usize flags) {
+inline static err_t p_syscall_removeat(fd_t base, const char* path, u32 flags) {
   return (err_t)_p_syscall3(p_sysop_removeat, (isize)base, (isize)path, (isize)flags);
 }
 inline static err_t p_syscall_renameat(fd_t oldbase, const char* oldpath, fd_t newbase,
@@ -386,10 +394,10 @@ inline static err_t p_syscall_pipe(fd_t* fdv, u32 flags) {
 inline static err_t p_syscall_test(psysop_t op) {
   return (err_t)_p_syscall1(p_sysop_test, (isize)op);
 }
-inline static fd_t p_syscall_wgpu_opendev(usize flags) {
-  return (fd_t)_p_syscall1(p_sysop_wgpu_opendev, (isize)flags);
+inline static fd_t p_syscall_gpudev(gpudevflag_t flags) {
+  return (fd_t)_p_syscall1(p_sysop_gpudev, (isize)flags);
 }
-inline static fd_t p_syscall_gui_mksurf(u32 width, u32 height, fd_t device, usize flags) {
+inline static fd_t p_syscall_gui_mksurf(u32 width, u32 height, fd_t device, u32 flags) {
   return (fd_t)_p_syscall4(p_sysop_gui_mksurf, (isize)width, (isize)height, (isize)device,
     (isize)flags);
 }

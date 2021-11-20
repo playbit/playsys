@@ -10,8 +10,7 @@
 #define VFILE_MAP_INITCAP  32  // initial capacity
 #define VFILE_FD_MIN  0x40000000  // minimum fd value vfile_map_alloc will return
 
-
-// hash map; file descriptor -> vfile
+// maps file descriptor -> vfile struct
 typedef struct vfile_map {
   u32      cap;
   u32      len;
@@ -241,45 +240,57 @@ static void vfile_map_test() {
 #endif
 
 
-fd_t vfile_open(vfile_t** fp, vfile_flag_t flags) {
-  vfile_t* f;
-  fd_t fdv[2];
-
-  // allocate a file descriptor
-  if (flags & VFILE_PIPE) {
-    // Note: we allocade a file descriptor from the OS to make sure we are
-    // not "shadowing" another file descriptor.
-    err_t e = _psys_pipe(0, fdv, 0); // fdv[0] = readable, fdv[1] writable
-    if (e < 0)
-      return e;
-    f = vfile_map_set(&g_vfile_map, fdv[0]);
-  } else {
-    f = vfile_map_alloc(&g_vfile_map);
-  }
-
-  if (!f) {
-    if (flags & VFILE_PIPE)
-      _psys_close(0, fdv[0]);
-    return p_err_nomem;
-  }
-
-  f->flags = flags;
-  *fp = f;
-
-  if (flags & VFILE_PIPE)
-    return (fd_t)fdv[1];
-  return f->fd;
-}
-
-
 vfile_t* vfile_lookup(fd_t fd) {
   return vfile_map_get(&g_vfile_map, fd);
 }
 
 
+fd_t vfile_open(vfile_t** fp, const char* name, const vfile_ops_t* fops, vfile_flag_t flags) {
+  assert(fops != NULL);
+  assert(name != NULL);
+  vfile_t* f;
+  fd_t pipefd[2];
+
+  // allocate a file descriptor
+  if (flags & (VFILE_PIPE_R | VFILE_PIPE_W)) {
+    if ((flags & (VFILE_PIPE_R | VFILE_PIPE_W)) == (VFILE_PIPE_R | VFILE_PIPE_W))
+      return p_err_invalid; // both flags set
+    err_t e = _psys_pipe(0, pipefd, 0); // pipefd[0] = readable, pipefd[1] writable
+    if (e < 0)
+      return e;
+    if (flags & VFILE_PIPE_W) {
+      // swap so that vfile->fd is writable and returnd fd is readable.
+      int fdr = pipefd[0];
+      pipefd[0] = pipefd[1];
+      pipefd[1] = fdr;
+      // now: pipefd[0] = writable, pipefd[1] readable
+    }
+    f = vfile_map_set(&g_vfile_map, pipefd[0]);
+  } else {
+    f = vfile_map_alloc(&g_vfile_map);
+  }
+
+  if (!f) {
+    if (flags & (VFILE_PIPE_R | VFILE_PIPE_W))
+      _psys_close(0, pipefd[0]);
+    return p_err_nomem;
+  }
+
+  f->flags = flags;
+  f->name = name;
+  f->fops = fops;
+  *fp = f;
+
+  if (flags & (VFILE_PIPE_R | VFILE_PIPE_W))
+    return (fd_t)pipefd[1];
+
+  return f->fd;
+}
+
+
 err_t vfile_close(vfile_t* f) {
   err_t ret = 0;
-  if (f->on_syscall)
-    ret = MAX(ret, (err_t)f->on_syscall(p_sysop_close, 0, 0, 0, 0, 0, f));
+  if (f->fops->release)
+    ret = f->fops->release(f);
   return vfile_map_del(&g_vfile_map, f->fd) ? ret : p_err_badfd;
 }

@@ -45,7 +45,7 @@ static void surf_post_guimsg(p_gui_surf_t& surf, p_gui_msg_t type, const T& msg)
 }
 
 
-isize p_gui_surf_read(p_gui_surf_t* surf, void* data, usize nbyte) {
+isize p_gui_surf_read(p_gui_surf_t* surf, char* data, usize nbyte) {
   if (!surf->window)
     return p_err_end;
 
@@ -64,11 +64,7 @@ isize p_gui_surf_read(p_gui_surf_t* surf, void* data, usize nbyte) {
     return p_err_end;
   }
 
-  // read input that the user wrote with write()
-  u8 buf[128] = {0};
-  isize len = read(surf->fd, buf, sizeof(buf));
-  if (len > 0)
-    dlog("TODO handle command from userland");
+  // TODO: read input that the user wrote with write()
 
   // process OS events
   glfwWaitEvents();

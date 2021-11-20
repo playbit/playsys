@@ -71,21 +71,13 @@ PUB int main(int argc, const char** argv) {
   //     Has a fixed size specific to the actual backing texture of the surface.
   //
 
-  // // select a GPU device
-  // fd_t wgpu_dev = open("/sys/wgpu/dev/gpu0", p_open_ronly, 0);
-  // check_status(wgpu_dev, "open /sys/wgpu/dev/gpu0");
-  // print("opened wgpu device (handle ", wgpu_dev, ")\n");
-  // // TODO: consider open-request info with query string, e.g.
-  // //       "/gpu?required-feats=texture-compression-bc"
-  // // TODO: allow read device to access name, features, limits and isFallbackAdapter.
-  // // TODO: allow p_open_rw on device to enable simple compute
-
-  // // select a GPU device (alt to fs, using a syscall instead)
-  // fd_t wgpu_dev = p_syscall_wgpu_opendev(0); print("wgpu_opendev:", wgpu_dev, "\n");
-  // check_status(wgpu_dev, "wgpu_opendev");
+  // select a GPU device (alt to fs, using a syscall instead)
+  fd_t gpudev = -1;
+  gpudev = p_syscall_gpudev(p_gpudev_powlow); print("gpudev:", gpudev, "\n");
+  check_status(gpudev, "gpudev");
 
   // create a graphics surface
-  fd_t gui_surf = p_syscall_gui_mksurf(400, 300, /*wgpu_dev*/-1, 0);
+  fd_t gui_surf = p_syscall_gui_mksurf(400, 300, gpudev, 0);
   check_status(gui_surf, "gui_mksurf");
 
   // TODO: consider a gui_ctl syscall for controlling gui/wgpu resources, like setting
@@ -117,7 +109,7 @@ PUB int main(int argc, const char** argv) {
   // sys_sleep(0, 200000000); // 200ms
 
   check_status(close(gui_surf), "close(wgpu_surf)");
-  // check_status(close(wgpu_dev), "close(wgpu_dev)");
+  check_status(close(gpudev), "close(gpudev)");
 
   return 0;
 }

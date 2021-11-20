@@ -7,7 +7,7 @@ err_t ioring_req_readfile(
   void* ring_sqe,
   const char* filename)
 {
-  u32 index = 0, current_block = 0, tail = 0, next_tail = 0;
+  u32 tail = 0, next_tail = 0;
   // next_tail = tail = *sring->tail;
   next_tail = tail = *(u32*)(ring_sq + p.sq_off.tail);
   next_tail++;
@@ -50,7 +50,7 @@ void hello_ioring() {
   // request reading a file (WIP; not yet working)
   err = ioring_req_readfile(ringp, ring_sq, ring_sqe, "hello.txt");
   print("ioring_req_readfile => ", p_err_str(err), "\n");
-  check_status(err, "mmap P_IORING_OFF_SQES");
+  // check_status(err, "mmap P_IORING_OFF_SQES");
 
   // close ring
   check_status(close(ring), "close(ring)");

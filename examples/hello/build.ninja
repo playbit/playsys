@@ -101,7 +101,7 @@ build $builddir/hello_mac_x64_d: ld_macos_x64 $
   $builddir/mac_x64/hello_triangle.o $
   $builddir/mac_x64/hello_ioring.o $
   $builddir/mac_x64/syslib.o $
-  $builddir/mac_x64/ioring_darwin.o $
+  $builddir/mac_x64/ioring.o $
   $builddir/mac_x64/vfile.o $
   $builddir/mac_x64/sys_posix.o
   ldflags = $ldflags -L$wgpu_lib_dir -rpath $wgpu_lib_dir -lplaywgpu_d -lc++
@@ -111,7 +111,7 @@ build $builddir/hello_mac_x64: ld_macos_x64 $
   $builddir/mac_x64/hello_triangle.o $
   $builddir/mac_x64/hello_ioring.o $
   $builddir/mac_x64/syslib.o $
-  $builddir/mac_x64/ioring_darwin.o $
+  $builddir/mac_x64/ioring.o $
   $builddir/mac_x64/vfile.o $
   $builddir/mac_x64/sys_posix.o $
   $wgpu_lib_dir/libplaywgpu_all.a
@@ -140,7 +140,7 @@ build $builddir/mac_x64/hello_ioring.o:   c2obj_host hello_ioring.c
 build $builddir/mac_x64/syslib.o:         c2obj_host syslib.c
 build $builddir/mac_x64/sys_posix.o:      c2obj_host $base_dir/sys_posix.c
 build $builddir/mac_x64/vfile.o:          c2obj_host $base_dir/vfile.c
-build $builddir/mac_x64/ioring_darwin.o:  c2obj_host $base_dir/ioring_darwin.c
+build $builddir/mac_x64/ioring.o:  c2obj_host $base_dir/ioring.c
 
 build $builddir/wasm32/hello.o:          c2obj_wasm hello.c
 build $builddir/wasm32/hello_triangle.o: c2obj_wasm hello_triangle.c

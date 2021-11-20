@@ -436,10 +436,10 @@ static bool gen_c(FILE* outf, doc_t* spec, const char* tplfile, void** mnext) {
   str_appendcstr(ALLOCVAR("cstr"), "const char*");
   str_appendcstr(ALLOCVAR("ptr"), "const void*");
   str_appendcstr(ALLOCVAR("mutptr"), "void*");
-  str_appendcstr(ALLOCVAR("ptrptr"), "void**");
-  str_appendcstr(ALLOCVAR("fdptr"), "fd" TYPE_SUFFIX "*");
-  str_appendcstr(ALLOCVAR("ioring_params"), ns "ioring_params_t");
-  str_appendcstr(ALLOCVAR("*ioring_params"), ns "ioring_params_t*");
+  str_appendcstr(ALLOCVAR("*ptr"), "void**");
+  str_appendcstr(ALLOCVAR("*fd"), "fd" TYPE_SUFFIX "*");
+  str_appendcstr(ALLOCVAR("ioring_params"), ns "ioring_params" TYPE_SUFFIX);
+  str_appendcstr(ALLOCVAR("*ioring_params"), ns "ioring_params" TYPE_SUFFIX "*");
 
   // add types to set of vars
   t = get_table(spec, "types");
@@ -449,13 +449,14 @@ static bool gen_c(FILE* outf, doc_t* spec, const char* tplfile, void** mnext) {
   }
 
   fmt_table_entry_t entries[] = {
-    {"TYPES",      "types",         "typedef {1}\t{0}" TYPE_SUFFIX ";\t// {2}\n"},
-    {"CONSTANTS",  "constants",     "#define " NS "{0}\t(({1}" TYPE_SUFFIX "){2})\t// {3}\n"},
-    {"ERR_ENUM",   "errors",        "  " ns "err_{0}\t=\t{R>},\t// {1}\n"},
-    {"ERR_SWITCH", "errors",        "  case " ns "err_{0}:\treturn \"{0}\";\n"},
-    {"OPENFLAG_ENUM", "open_flags", "  " ns "open_{0}\t=\t{1>},\t// {2}\n"},
-    {"MMAPFLAG_ENUM", "mmap_flags", "  " ns "mmap_{0}\t=\t{1>},\t// {2}\n"},
-    {"SYSOP_ENUM", "sysops",        "  " ns sysop_prefix "{0}\t=\t{1>},\n"},
+    {"TYPES",      "types",     "typedef {1}\t{0}" TYPE_SUFFIX ";\t// {2}\n"},
+    {"CONSTANTS",  "constants", "#define " NS "{0}\t(({1}" TYPE_SUFFIX "){2})\t// {3}\n"},
+    {"ERR_ENUM",   "errors",    "  " ns "err_{0}\t=\t{R>},\t// {1}\n"},
+    {"ERR_SWITCH", "errors",    "  case " ns "err_{0}:\treturn \"{0}\";\n"},
+    {"SYSOP_ENUM", "sysops",    "  " ns sysop_prefix "{0}\t=\t{1>},\n"},
+    {"OPENFLAG_ENUM", "open_flags",     "  " ns "open_{0}\t=\t{1>},\t// {2}\n"},
+    {"MMAPFLAG_ENUM", "mmap_flags",     "  " ns "mmap_{0}\t=\t{1>},\t// {2}\n"},
+    {"GPUDEVFLAG_ENUM", "gpudev_flags", "  " ns "gpudev_{0}\t=\t{1>},\t// {2}\n"},
   };
   varc += fmt_table_entries(
     spec, &vars[varc], countof(vars)-varc, entries, countof(entries));

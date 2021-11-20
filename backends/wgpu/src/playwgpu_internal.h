@@ -9,8 +9,13 @@
 #include <unistd.h>
 #include <assert.h>
 #include <stdio.h>
+
+#include "../../base/sys_impl.h"
 #include "ringbuf.h"
 
+#ifdef dlog
+  #undef dlog
+#endif
 #ifdef PWGPU_DEBUG
   #ifndef DLOG_PREFIX
     #define DLOG_PREFIX "\e[1;34m[wgpu]\e[0m "
@@ -30,13 +35,6 @@
 #endif
 
 
-#define MAX(a,b) \
-  ({__typeof__ (a) _a = (a); __typeof__ (b) _b = (b); _a > _b ? _a : _b; })
-
-#define MIN(a,b) \
-  ({__typeof__ (a) _a = (a); __typeof__ (b) _b = (b); _a < _b ? _a : _b; })
-
-
 typedef struct GLFWwindow GLFWwindow;
 
 struct p_wgpu_dev {
@@ -48,11 +46,11 @@ struct p_wgpu_dev {
 };
 
 struct p_gui_surf {
-  fd_t             fd; // "our end" of the read-write, non-seekable stream
   GLFWwindow*      window;
   wgpu::Surface    surface;
   wgpu::Device     device;
   p_ringbuf_t      rbuf; // messages for the user to read()
+  // TODO: wbuf
   p_gui_surfinfo_t info; // framebuffer info
 };
 

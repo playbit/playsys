@@ -54,6 +54,11 @@ enum ${ns}mmapflag {
 ${MMAPFLAG_ENUM}
 };
 
+// gpudev flags (possible bits of type ${gpudevflag})
+enum ${ns}gpudevflag {
+${GPUDEVFLAG_ENUM}
+};
+
 // syscall operations (possible values of type ${psysop})
 enum ${ns}sysop {
 ${SYSOP_ENUM}

@@ -18,12 +18,30 @@
   #define NULL ((void*)0)
 #endif
 
+#ifdef __cplusplus
+  #define EXTERNC extern "C"
+#else
+  #define EXTERNC extern
+#endif
+
 #define USIZE_MAX ((usize)-1)
 
 #if __has_attribute(musttail)
   #define MUSTTAIL __attribute__((musttail))
 #else
   #define MUSTTAIL
+#endif
+
+#if __has_attribute(__designated_init__)
+  #define _designated_init __attribute__((__designated_init__))
+#else
+  #define _designated_init
+#endif
+
+#if __has_attribute(randomize_layout)
+  #define _randomize_layout __attribute__((randomize_layout))
+#else
+  #define _randomize_layout _designated_init
 #endif
 
 // UNLIKELY(integralexpr)->integralexpr
@@ -62,7 +80,9 @@
   })
 #else
   #define dlog(fmt, ...) ((void)0)
-  #define assert(...) ((void)0)
+  #ifndef assert
+    #define assert(...) ((void)0)
+  #endif
 #endif
 
 #define MAX(a,b) \
@@ -81,51 +101,50 @@
 // ---------------------------------------------------
 // vfile
 
+typedef struct vfile vfile_t;
+typedef struct vfile_ops vfile_ops_t;
+
 // virtual file flags
 typedef enum vfile_flag {
-  // content types
+  // content types/tags
   VFILE_T_MASK     = 0xff,
-  VFILE_T_WGPU_DEV = 1,
-  VFILE_T_GUI_SURF = 2,
-  VFILE_T_IORING   = 3,
+  VFILE_T_GPUDEV,
+  VFILE_T_GUI_SURF,
 
-  VFILE_PIPE = 1 << 8, // allocate two fds; vfile_open returns writable end
+  // allocate two fds; vfile->fd is readable end, vfile_open returns writable end
+  VFILE_PIPE_R = 1 << 1,
+  // allocate two fds; vfile->fd is writable end, vfile_open returns readable end
+  VFILE_PIPE_W = 1 << 2,
 } vfile_flag_t;
 
-#define VFILE_SYSCALL_DEFAULT (-2147483648) // -0x80000000
+struct vfile_ops {
+  err_t (*release) (vfile_t*); // on close
+  isize (*read)    (vfile_t*, char*, usize);
+  isize (*write)   (vfile_t*, const char*, usize);
+  err_t (*openat)  (vfile_t* at, const char*, openflag_t, usize);
+  err_t (*mmap)    (vfile_t*, void**, usize len, mmapflag_t, usize offs);
+} _randomize_layout;
 
-// virtual file data
-typedef struct vfile vfile_t;
-typedef isize(*vfile_onsyscall_t)(psysop_t,isize,isize,isize,isize,isize,vfile_t*);
 struct vfile {
-  fd_t  fd;
-  u32   flags; // vfile_flag_t
-  void* data;  // data which depends on type
-
-  // optional syscall filter; return VFILE_SYSCALL_DEFAULT to skip filtering
-  vfile_onsyscall_t on_syscall;
+  fd_t        fd;
+  u32         flags; // vfile_flag_t
+  void*       data;  // use depends on flags
+  const char* name;
+  const vfile_ops_t* fops;
 };
 
 // virtual file functions
-fd_t vfile_open(vfile_t** fp, vfile_flag_t);
+fd_t vfile_open(vfile_t** fp, const char* name, const vfile_ops_t*, vfile_flag_t);
 err_t vfile_close(vfile_t*);
-vfile_t* vfile_lookup(fd_t); // returns NULL if not found
+EXTERNC vfile_t* vfile_lookup(fd_t); // returns NULL if not found
 
-// syscall filtering.
-// looks up vfile for fd and if found, invokes its on_syscall handler.
-// returns VFILE_SYSCALL_DEFAULT if the caller should handle the syscall.
-inline static isize vfile_syscall(
-  fd_t fd, psysop_t op, isize a1, isize a2, isize a3, isize a4, isize a5)
-{
-  vfile_t* f = vfile_lookup(fd);
-  if (f && f->on_syscall)
-    return f->on_syscall(op, a1, a2, a3, a4, a5, f);
-  return VFILE_SYSCALL_DEFAULT;
+// VFILE_JUMP_FOP routes a call to a vfile's fops if found for fd
+#define VFILE_JUMP_FOP(FOP, fd, err_res, ...) { \
+  vfile_t* f = vfile_lookup(fd);                \
+  if (f)                                        \
+    return f->fops->FOP ? f->fops->FOP(f, ##__VA_ARGS__) : \
+             err_res; \
 }
-
-// helper for easier argument forwarding
-#define VFILE_SYSCALL(fd, op, a1, a2, a3, a4, a5) \
-  vfile_syscall(fd,op,((isize)a1),((isize)a2),((isize)a3),((isize)a4),((isize)a5))
 
 
 // -----------------------------------------------------------------------------------
