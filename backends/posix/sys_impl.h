@@ -8,19 +8,49 @@
 
 #define static_assert _Static_assert
 
+#define XSTR(s) STR(s)
+#define STR(s) #s
+
+#define L1_CACHELINE_NBYTE 64
+#define _p_cacheline_aligned __attribute__((__aligned__(L1_CACHELINE_NBYTE)))
+
+#ifndef NULL
+  #define NULL ((void*)0)
+#endif
+
+#define USIZE_MAX ((usize)-1)
+
 #if __has_attribute(musttail)
   #define MUSTTAIL __attribute__((musttail))
 #else
   #define MUSTTAIL
 #endif
 
-#ifndef countof
-  #define countof(x) \
-    ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
+// UNLIKELY(integralexpr)->integralexpr
+// Provide explicit branch prediction. Use like this:
+// if (UNLIKELY(buf & 0xff))
+//   error_hander("error");
+#ifdef __builtin_expect
+  #define UNLIKELY(x) __builtin_expect((x), 0)
+  #define LIKELY(x)   __builtin_expect((x), 1)
+#else
+  #define UNLIKELY(x) (x)
+  #define LIKELY(x)   (x)
 #endif
 
-#define XSTR(s) STR(s)
-#define STR(s) #s
+#ifndef countof
+  #define countof(x) \
+    ((sizeof(x)/sizeof(0[x])) / ((usize)(!(sizeof(x) % sizeof(0[x])))))
+#endif
+#ifndef strlen
+  #define strlen __builtin_strlen
+#endif
+#ifndef memcpy
+  #define memcpy __builtin_memcpy
+#endif
+#ifndef memset
+  #define memset __builtin_memset
+#endif
 
 #ifdef SYS_DEBUG
   #include <stdio.h>
@@ -35,29 +65,21 @@
   #define assert(...) ((void)0)
 #endif
 
-#ifndef strlen
-  #define strlen __builtin_strlen
-#endif
-#ifndef memcpy
-  #define memcpy __builtin_memcpy
-#endif
-#ifndef memset
-  #define memset __builtin_memset
-#endif
-#ifndef NULL
-  #define NULL ((void*)0)
-#endif
-
 #define MAX(a,b) \
-  ({__typeof__ (a) _a = (a); __typeof__ (b) _b = (b); _a > _b ? _a : _b; })
+  ({__typeof__(a) _a = (a); __typeof__(b) _b = (b); _a > _b ? _a : _b; })
   // turns into CMP + CMOV{L,G} on x86_64
   // turns into CMP + CSEL on arm64
 
 #define MIN(a,b) \
-  ({__typeof__ (a) _a = (a); __typeof__ (b) _b = (b); _a < _b ? _a : _b; })
+  ({__typeof__(a) _a = (a); __typeof__(b) _b = (b); _a < _b ? _a : _b; })
   // turns into CMP + CMOV{L,G} on x86_64
   // turns into CMP + CSEL on arm64
 
+#include "sys_impl1.h"
+
+
+// ---------------------------------------------------
+// vfile
 
 // virtual file flags
 typedef enum vfile_flag {
@@ -105,6 +127,8 @@ inline static isize vfile_syscall(
 #define VFILE_SYSCALL(fd, op, a1, a2, a3, a4, a5) \
   vfile_syscall(fd,op,((isize)a1),((isize)a2),((isize)a3),((isize)a4),((isize)a5))
 
+
+// -----------------------------------------------------------------------------------
 // syscall implementations
 err_t _psys_pipe(psysop_t, fd_t* fdp, u32 flags);
 err_t _psys_close(psysop_t, fd_t);
