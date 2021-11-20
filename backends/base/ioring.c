@@ -5,7 +5,6 @@
 //   _psys_ioring_enter
 //   _psys_ioring_register
 
-#define SYS_DEBUG // define to enable debug logging
 #include "sys_impl.h"
 
 #if defined(__linux__)

@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-#define SYS_DEBUG // define to enable debug logging
 #include "sys_impl.h"
 
 #include <stdlib.h>

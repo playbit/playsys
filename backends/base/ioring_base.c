@@ -25,7 +25,6 @@
 // needs to check the SQ flags for IORING_SQ_NEED_WAKEUP *after* updating
 // the SQ tail; a full memory barrier mbarrier() is needed between.
 
-#define SYS_DEBUG // define to enable debug logging
 #include "sys_impl.h"
 #include <stdlib.h>
 #include <sys/mman.h>
