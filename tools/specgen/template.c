@@ -23,6 +23,8 @@ proot:
       case '\n': line++; break;
       case '\\': next++; break; // don't check next byte
       case '$':
+        if (next == end || next[1] != '{')
+          break;
         fwrite(chunk, next - chunk, 1, outf);
         goto startname;
     }
