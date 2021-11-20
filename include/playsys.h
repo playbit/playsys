@@ -86,10 +86,8 @@ enum p_mmapflag {
   p_mmap_private    =  0x10, // Create a private copy-on-write mapping
   p_mmap_fixed      =  0x40, // Place the mapping at exactly the address addr
   p_mmap_anonymous  =  0x80, // Not backed by file, contents zero-initialized, fd argument ignored.
-  p_mmap_growsdown  = 0x100, // Indicate the mapping should extend downward in memory
-  p_mmap_populate   = 0x200, // Populate (prefault) page tables for a mapping
-  p_mmap_nonblock   = 0x400, // use with populate to not block on prefault
-  p_mmap_stack      = 0x800, // Hint to allocate mapping at an address suitable for a process or thread stack
+  p_mmap_populate   = 0x100, // Populate (prefault) page tables for a mapping
+  p_mmap_nonblock   = 0x200, // use with populate to not block on prefault
 };
 
 // syscall operations (possible values of type psysop_t)

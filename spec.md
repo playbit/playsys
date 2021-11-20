@@ -155,10 +155,8 @@ shared     |    0x8 | Share this mapping (impl as MAP_SHARED_VALIDATE)
 private    |   0x10 | Create a private copy-on-write mapping
 fixed      |   0x40 | Place the mapping at exactly the address `addr`
 anonymous  |   0x80 | Not backed by file, contents zero-initialized, fd argument ignored.
-growsdown  |  0x100 | Indicate the mapping should extend downward in memory
-populate   |  0x200 | Populate (prefault) page tables for a mapping
-nonblock   |  0x400 | use with `populate` to not block on prefault
-stack      |  0x800 | Hint to allocate mapping at an address suitable for a process or thread stack
+populate   |  0x100 | Populate (prefault) page tables for a mapping
+nonblock   |  0x200 | use with `populate` to not block on prefault
 
 
 #### ioring_setup
