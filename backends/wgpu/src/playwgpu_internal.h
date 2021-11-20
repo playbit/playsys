@@ -10,7 +10,7 @@
 #include <assert.h>
 #include <stdio.h>
 
-#include "../../base/sys_impl.h"
+#include "../../base/base.h"
 #include "ringbuf.h"
 
 #ifdef dlog

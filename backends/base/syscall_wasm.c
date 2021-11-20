@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// This file is conditionally included by syscall.c
+
 // __attribute__((import_module("module_name")))
 // __attribute__((import_name("function_name")))
 // __attribute__((export_name("function_name")))

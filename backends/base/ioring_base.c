@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// This file is conditionally included by ioring.c
 
 // ioring driver
 //
@@ -25,9 +26,11 @@
 // needs to check the SQ flags for IORING_SQ_NEED_WAKEUP *after* updating
 // the SQ tail; a full memory barrier mbarrier() is needed between.
 
-#include "sys_impl.h"
-#include <stdlib.h>
-#include <sys/mman.h>
+// TODO: wasm
+#if defined(HAS_LIBC)
+  #include <stdlib.h>
+  #include <sys/mman.h>
+#endif
 
 
 #define IORING_MAX_ENTRIES              32768 // value from Linux 5.15

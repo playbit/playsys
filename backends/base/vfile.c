@@ -1,10 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
-#include "sys_impl.h"
+#include "base.h"
 
-#include <stdlib.h>
-#define memrealloc(ptr,size) realloc(ptr,size)
-#define memfree(ptr)         free(ptr)
+#if defined(HAS_LIBC)
+  #include <stdlib.h>
+  #define memrealloc(ptr,size) realloc(ptr,size)
+  #define memfree(ptr)         free(ptr)
+#else
+  // TODO: heap memory allocation (for now, just fail to allocate)
+  #define memrealloc(ptr,size) NULL
+  #define memfree(ptr)         ((void)0)
+#endif
 
 #define VFILE_MAP_INITCAP  32  // initial capacity
 #define VFILE_FD_MIN  0x40000000  // minimum fd value vfile_map_alloc will return

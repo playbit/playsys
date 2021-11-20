@@ -2,7 +2,6 @@ ninja_required_version = 1.3
 
 builddir     = out
 base_dir     = ../../backends/base
-js_dir       = ../../backends/js
 wgpu_dir     = ../../backends/wgpu
 wgpu_lib_dir = $wgpu_dir/out/debug
 
@@ -104,7 +103,7 @@ build $builddir/hello_mac_x64_d: ld_macos_x64 $
   $builddir/mac_x64/syslib.o $
   $builddir/mac_x64/ioring.o $
   $builddir/mac_x64/vfile.o $
-  $builddir/mac_x64/sys_posix.o
+  $builddir/mac_x64/syscall.o
   ldflags = $ldflags -L$wgpu_lib_dir -rpath $wgpu_lib_dir -lplaywgpu_d -lc++
 
 build $builddir/hello_mac_x64: ld_macos_x64 $
@@ -114,7 +113,7 @@ build $builddir/hello_mac_x64: ld_macos_x64 $
   $builddir/mac_x64/syslib.o $
   $builddir/mac_x64/ioring.o $
   $builddir/mac_x64/vfile.o $
-  $builddir/mac_x64/sys_posix.o $
+  $builddir/mac_x64/syscall.o $
   $wgpu_lib_dir/libplaywgpu_all.a
 
 # build $builddir/hello.wasm: wasm_asyncify $builddir/hello1.wasm
@@ -124,7 +123,7 @@ build $builddir/hello.wasm: wasm_asyncify $builddir/hello2.wasm
 #   $builddir/wasm32/hello.bc $
 #   $builddir/wasm32/hello_triangle.bc $
 #   $builddir/wasm32/syslib.bc $
-#   $builddir/wasm32/sys_wasm.bc $
+#   $builddir/wasm32/syscall.bc $
 #   $builddir/wasm32/pwgpu_ctx_wasm.bc
 
 build $builddir/hello2.wasm: ld_wasm $
@@ -132,27 +131,29 @@ build $builddir/hello2.wasm: ld_wasm $
   $builddir/wasm32/hello_triangle.o $
   $builddir/wasm32/hello_ioring.o $
   $builddir/wasm32/syslib.o $
-  $builddir/wasm32/sys_wasm.o $
+  $builddir/wasm32/syscall.o $
   $builddir/wasm32/pwgpu_ctx_wasm.o
 
 build $builddir/mac_x64/hello.o:          c2obj_host hello.c
 build $builddir/mac_x64/hello_triangle.o: c2obj_host hello_triangle.c
 build $builddir/mac_x64/hello_ioring.o:   c2obj_host hello_ioring.c
 build $builddir/mac_x64/syslib.o:         c2obj_host syslib.c
-build $builddir/mac_x64/sys_posix.o:      c2obj_host $base_dir/sys_posix.c
+build $builddir/mac_x64/syscall.o:        c2obj_host $base_dir/syscall.c
 build $builddir/mac_x64/vfile.o:          c2obj_host $base_dir/vfile.c
-build $builddir/mac_x64/ioring.o:  c2obj_host $base_dir/ioring.c
+build $builddir/mac_x64/ioring.o:         c2obj_host $base_dir/ioring.c
 
 build $builddir/wasm32/hello.o:          c2obj_wasm hello.c
 build $builddir/wasm32/hello_triangle.o: c2obj_wasm hello_triangle.c
 build $builddir/wasm32/syslib.o:         c2obj_wasm syslib.c
-build $builddir/wasm32/sys_wasm.o:       c2obj_wasm $js_dir/sys_wasm.c
+build $builddir/wasm32/syscall.o:        c2obj_wasm $base_dir/syscall.c
+build $builddir/wasm32/vfile.o:          c2obj_wasm $base_dir/vfile.c
+build $builddir/wasm32/ioring.o:         c2obj_wasm $base_dir/ioring.c
 build $builddir/wasm32/pwgpu_ctx_wasm.o: c2obj_wasm $wgpu_dir/src/ctx_wasm.c
 
 # build $builddir/wasm32/hello.bc:          c2bc_wasm hello.c
 # build $builddir/wasm32/hello_triangle.bc: c2bc_wasm hello_triangle.c
 # build $builddir/wasm32/syslib.bc:         c2bc_wasm syslib.c
-# build $builddir/wasm32/sys_wasm.bc:       c2bc_wasm $js_dir/sys_wasm.c
+# build $builddir/wasm32/syscall.bc:       c2bc_wasm $base_dir/syscall.c
 # build $builddir/wasm32/pwgpu_ctx_wasm.bc: c2bc_wasm $wgpu_dir/src/ctx_wasm.c
 
 # --------------------------------------------------------------

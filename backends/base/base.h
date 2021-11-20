@@ -14,6 +14,10 @@
 #define L1_CACHELINE_NBYTE 64
 #define _p_cacheline_aligned __attribute__((__aligned__(L1_CACHELINE_NBYTE)))
 
+#if !defined(__wasm__)
+  #define HAS_LIBC 1
+#endif
+
 #ifndef NULL
   #define NULL ((void*)0)
 #endif
@@ -70,7 +74,7 @@
   #define memset __builtin_memset
 #endif
 
-#ifdef SYS_DEBUG
+#if defined(SYS_DEBUG) && defined(HAS_LIBC)
   #include <stdio.h>
   #include <string.h> // strerror
   #include <assert.h>
@@ -95,7 +99,7 @@
   // turns into CMP + CMOV{L,G} on x86_64
   // turns into CMP + CSEL on arm64
 
-#include "sys_impl1.h"
+#include "base1.h"
 
 
 // ---------------------------------------------------
