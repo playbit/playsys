@@ -13,6 +13,8 @@ err_t ioring_req_readfile(
   next_tail++;
   p_mbarrier_r();
 
+  // WIP
+
   return p_err_not_supported;
 }
 
@@ -45,9 +47,10 @@ void hello_ioring() {
     ring, P_IORING_OFF_SQES);
   check_status(err, "mmap P_IORING_OFF_SQES");
 
-  // request reading a file
+  // request reading a file (WIP; not yet working)
   err = ioring_req_readfile(ringp, ring_sq, ring_sqe, "hello.txt");
-  check_status(err, "mmap P_IORING_OFF_SQES");
+  print("ioring_req_readfile => ", p_err_str(err), "\n");
+  // check_status(err, "mmap P_IORING_OFF_SQES");
 
   // close ring
   check_status(close(ring), "close(ring)");
