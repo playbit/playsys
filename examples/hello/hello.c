@@ -73,10 +73,10 @@ PUB int main(int argc, const char** argv) {
 
   // select a GPU device (alt to fs, using a syscall instead)
   fd_t gpudev = -1;
-  gpudev = p_syscall_gpudev(p_gpudev_powlow); print("gpudev:", gpudev, "\n");
+  gpudev = p_syscall_gpudev(p_gpudev_powlow);
   check_status(gpudev, "gpudev");
 
-  // create a graphics surface
+  // create a graphics surface (if gpudev < 0, automatically select a GPU device)
   fd_t gui_surf = p_syscall_gui_mksurf(400, 300, gpudev, 0);
   check_status(gui_surf, "gui_mksurf");
 
