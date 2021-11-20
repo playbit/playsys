@@ -36,7 +36,7 @@ static err_t wgpu_dev_release(vfile_t* f) {
 }
 
 
-static isize _psys_gpudev(psysop_t op, gpudevflag_t flags) {
+static fd_t _psys_gpudev(psysop_t op, gpudevflag_t flags) {
   static const vfile_ops_t fops = {
     .release = wgpu_dev_release,
   };
@@ -68,7 +68,7 @@ static isize gui_surf_write(vfile_t* f, const char* data, usize size) {
   return p_gui_surf_write(f->data, data, size);
 }
 
-static isize _psys_gui_mksurf(psysop_t op, u32 width, u32 height, fd_t device, u32 flags) {
+static fd_t _psys_gui_mksurf(psysop_t op, u32 width, u32 height, fd_t device, u32 flags) {
   static const vfile_ops_t fops = {
     .release = gui_surf_release,
     .read = gui_surf_read,
@@ -96,7 +96,7 @@ static isize _psys_gui_mksurf(psysop_t op, u32 width, u32 height, fd_t device, u
 }
 
 
-static isize _psys_NOT_IMPLEMENTED(psysop_t op) {
+static err_t _psys_NOT_IMPLEMENTED(psysop_t op) {
   return p_err_not_supported;
 }
 
@@ -128,7 +128,7 @@ isize p_syscall(
     case p_sysop_removeat: FORWARD(_psys_NOT_IMPLEMENTED);
     case p_sysop_renameat: FORWARD(_psys_NOT_IMPLEMENTED);
 
-    case p_sysop_gpudev:   FORWARD(_psys_gpudev);
+    case p_sysop_gpudev:     FORWARD(_psys_gpudev);
     case p_sysop_gui_mksurf: FORWARD(_psys_gui_mksurf);
   }
   return p_err_sys_op;
