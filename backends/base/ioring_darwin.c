@@ -343,7 +343,7 @@ static err_t _ioring_mmap(
 }
 
 
-static isize _ioring_on_syscall(
+static isize _vfile_syscall(
   psysop_t op, isize a1, isize a2, isize a3, isize a4, isize a5, vfile_t* f)
 {
   switch (op) {
@@ -388,7 +388,7 @@ fd_t _psys_ioring_setup(psysop_t _, u32 entries, p_ioring_params_t* params) {
     return fd;
   }
   f->data = ctx;
-  f->on_syscall = _ioring_on_syscall;
+  f->on_syscall = _vfile_syscall;
   return fd;
 }
 

@@ -50,7 +50,7 @@ void hello_ioring() {
   // request reading a file (WIP; not yet working)
   err = ioring_req_readfile(ringp, ring_sq, ring_sqe, "hello.txt");
   print("ioring_req_readfile => ", p_err_str(err), "\n");
-  // check_status(err, "mmap P_IORING_OFF_SQES");
+  check_status(err, "mmap P_IORING_OFF_SQES");
 
   // close ring
   check_status(close(ring), "close(ring)");

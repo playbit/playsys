@@ -21,7 +21,7 @@ Specification: [spec.md](spec.md)
 - [`include/playsys.h`](include/playsys.h) C API
 - [`examples/hello`](examples/hello/) contains an example program
 - [`backends`](backends/) implementations of the playsys API for host platforms
-  - [`posix`](backends/posix/)
+  - [`base`](backends/base/)
     C implementation of playsys functions on POSIX host's libc
   - [`wgpu`](backends/wgpu/) WebGPU implementation for mac, win & linux based on
     [Dawn](https://dawn.googlesource.com/dawn)

@@ -59,8 +59,8 @@ if [ "$CMD" = "watch" ]; then
             ../../backends/wgpu/out/debug \
             ../../backends/wgpu/include \
             ../../backends/wgpu/src/*wasm* \
-            ../../backends/posix/*.c \
-            ../../backends/posix/*.h \
+            ../../backends/base/*.c \
+            ../../backends/base/*.h \
             ../../backends/js/*.c \
             ../../include
   done

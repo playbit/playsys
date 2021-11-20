@@ -9,6 +9,7 @@
 #include <stdlib.h> // exit
 #include <string.h> // memcmp
 #include <time.h>   // nanosleep
+#include <sys/mman.h> // mmap
 #include <sys/errno.h>
 #include <sys/socket.h> // socketpair
 #include <assert.h>
@@ -77,6 +78,8 @@ static err_t set_nonblock(fd_t fd) {
 
 // ---------------------------------------------------
 // vfile on pipe or socketpair
+
+// TODO: get rid of this older vfile implementation; use new "vfile" API instead.
 
 // virtual file type
 typedef enum {
@@ -190,7 +193,36 @@ static err_t _psys_mmap(
 {
   if (fd > -1)
     FWD_VFILE_SYSCALL(fd, op, addr, length, flag, fd, offs)
-  return p_err_badfd;
+
+  int prot = 0;
+  if (flag & p_mmap_prot_none)  prot |= PROT_NONE;
+  if (flag & p_mmap_prot_read)  prot |= PROT_READ;
+  if (flag & p_mmap_prot_write) prot |= PROT_WRITE;
+  if (flag & p_mmap_prot_exec)  prot |= PROT_EXEC;
+
+  int flags = 0;
+  if (flag & p_mmap_shared)    flags |= MAP_SHARED;
+  if (flag & p_mmap_private)   flags |= MAP_PRIVATE;
+  if (flag & p_mmap_fixed)     flags |= MAP_FIXED;
+  #if defined(MAP_ANON)
+  if (flag & p_mmap_anonymous) flags |= MAP_ANON;
+  #endif
+
+  // unsupported flags
+  if (flag & ( p_mmap_populate
+             | p_mmap_nonblock
+             #if !defined(MAP_ANON)
+             | p_mmap_anonymous
+             #endif
+  )) {
+    return p_err_invalid;
+  }
+
+  void* p = mmap(*addr, length, prot, flags, fd, offs);
+  if (p == MAP_FAILED)
+    return p_err_nomem;
+  *addr = p;
+  return 0;
 }
 
 
