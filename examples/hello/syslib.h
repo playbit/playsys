@@ -11,9 +11,6 @@ isize sys_read(fd_t fd, void* data, usize nbyte);
 
 isize sys_sleep(usize seconds, usize nanoseconds);
 
-// sys_ret sys_ring_enter(fd_t ring_fd, u32 to_submit, u32 min_complete, u32 flags);
-
-const char* p_errname(err_t err);
 
 #ifndef SYS_NO_SYSLIB_LIBC_API
   #define exit   sys_exit

@@ -38,22 +38,3 @@ isize sys_sleep(usize seconds, usize nanoseconds) {
 // sys_ret sys_ring_enter(fd_t ring_fd, u32 to_submit, u32 min_complete, u32 flags) {
 //   return sys_syscall(sys_op_ring_enter, ring_fd, to_submit, min_complete, flags, 0, 0);
 // }
-
-const char* p_errname(err_t e) {
-  switch ((enum p_err)e) {
-    case p_err_none          : return "no error";
-    case p_err_badfd         : return "invalid file descriptor";
-    case p_err_invalid       : return "invalid data or argument";
-    case p_err_sys_op        : return "invalid syscall";
-    case p_err_bad_name      : return "invalid or misformed name";
-    case p_err_not_found     : return "resource not found";
-    case p_err_name_too_long : return "name too long";
-    case p_err_canceled      : return "operation canceled";
-    case p_err_not_supported : return "not supported";
-    case p_err_exists        : return "already exists";
-    case p_err_end           : return "end of resource";
-    case p_err_access        : return "permission denied";
-    case p_err_nomem         : return "cannot allocate memory";
-  }
-  return "unknown error";
-}

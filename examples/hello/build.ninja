@@ -99,6 +99,7 @@ rule wasm_asyncify
 build $builddir/hello_mac_x64_d: ld_macos_x64 $
   $builddir/mac_x64/hello.o $
   $builddir/mac_x64/hello_triangle.o $
+  $builddir/mac_x64/hello_ioring.o $
   $builddir/mac_x64/syslib.o $
   $builddir/mac_x64/ioring_darwin.o $
   $builddir/mac_x64/vfile.o $
@@ -108,6 +109,7 @@ build $builddir/hello_mac_x64_d: ld_macos_x64 $
 build $builddir/hello_mac_x64: ld_macos_x64 $
   $builddir/mac_x64/hello.o $
   $builddir/mac_x64/hello_triangle.o $
+  $builddir/mac_x64/hello_ioring.o $
   $builddir/mac_x64/syslib.o $
   $builddir/mac_x64/ioring_darwin.o $
   $builddir/mac_x64/vfile.o $
@@ -127,12 +129,14 @@ build $builddir/hello.wasm: wasm_asyncify $builddir/hello2.wasm
 build $builddir/hello2.wasm: ld_wasm $
   $builddir/wasm32/hello.o $
   $builddir/wasm32/hello_triangle.o $
+  $builddir/wasm32/hello_ioring.o $
   $builddir/wasm32/syslib.o $
   $builddir/wasm32/sys_wasm.o $
   $builddir/wasm32/pwgpu_ctx_wasm.o
 
 build $builddir/mac_x64/hello.o:          c2obj_host hello.c
 build $builddir/mac_x64/hello_triangle.o: c2obj_host hello_triangle.c
+build $builddir/mac_x64/hello_ioring.o:   c2obj_host hello_ioring.c
 build $builddir/mac_x64/syslib.o:         c2obj_host syslib.c
 build $builddir/mac_x64/sys_posix.o:      c2obj_host $posix_dir/sys_posix.c
 build $builddir/mac_x64/vfile.o:          c2obj_host $posix_dir/vfile.c

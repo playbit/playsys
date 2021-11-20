@@ -1,4 +1,5 @@
 #include "syslib.h"
+#include <playsys-gui.h>
 
 #define PUB __attribute__((visibility("default"))) /* WASM export */
 #ifndef NULL
