@@ -52,7 +52,7 @@ _TODO_
 PlaySys is one step in a three-part strategy to birth a new software platform:
 
 #### Step 1
-PlaySys — a syscall-like API that is the interface betweet a program and the
+PlaySys — a syscall-like API that is the interface between a program and the
 OS/environment. It is how the program percieves and experiences reality.
 Filesystem acts as an arbitrary extension to a minimal syscall API, which
 includes an io_uring-like interface.
